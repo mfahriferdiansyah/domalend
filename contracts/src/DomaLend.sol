@@ -76,9 +76,14 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
     uint256 public queueHead = 1;
     uint256 public queueTail = 1;
     
+    // Utilization tracking for anti-gaming
+    uint256 public totalBorrowed; // Total amount currently borrowed
+    uint256 public totalLiquidity; // Total USDC available in pool
+    
     // Constants
     uint256 public constant MAX_LOAN_TO_VALUE = 5000; // 50%
     uint256 public constant BASE_INTEREST_RATE = 800; // 8% annual base rate
+    uint256 public constant MAX_UTILIZATION_PREMIUM = 4200; // 42% max premium (50% total at 100% util)
     
     // Events
     event Staked(address indexed user, uint256 amount, uint256 timestamp);
@@ -97,6 +102,7 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
     event ExitFeeCharged(address indexed user, uint256 amount, uint256 fee);
     event PoolValueUpdated(uint256 newPoolValue, uint256 feeAdded);
     event MinimumFeeEnforced(uint256 indexed loanId, uint256 timeBasedFee, uint256 minimumFee, uint256 actualFee);
+    event UtilizationUpdated(uint256 totalBorrowed, uint256 totalLiquidity, uint256 utilizationRate);
     event LoanFullyRepaid(uint256 indexed loanId, address indexed borrower);
     
     // Emergency/Development events
@@ -122,6 +128,10 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
         require(usdcAmount > 0, "Amount must be > 0");
         
         usdc.safeTransferFrom(msg.sender, address(this), usdcAmount);
+        
+        // Update utilization tracking
+        totalLiquidity += usdcAmount;
+        _updateUtilizationStats();
         
         PointsCalculations.StakeInfo storage stake = stakes[msg.sender];
         
@@ -192,6 +202,10 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
         // Transfer net amount to user
         uint256 netAmount = usdcAmount - exitFee;
         usdc.safeTransfer(msg.sender, netAmount);
+        
+        // Update utilization tracking
+        totalLiquidity -= netAmount; // Reduce available liquidity
+        _updateUtilizationStats();
         
         // Emit events
         if (exitFee > 0) {
@@ -267,6 +281,11 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
         // Transfer USDC to borrower
         usdc.safeTransfer(msg.sender, requestedAmount);
         
+        // Update utilization tracking
+        totalBorrowed += requestedAmount;
+        totalLiquidity -= requestedAmount; // Reduce available liquidity
+        _updateUtilizationStats();
+        
         // Reduce pool value when loan is disbursed
         totalPoolValue -= requestedAmount;
         
@@ -305,6 +324,11 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
         uint256 currentTotalOwed = LoanCalculations.calculateTotalOwed(loan);
         if (loan.amountRepaid >= currentTotalOwed) {
             loan.isActive = false;
+            
+            // Update utilization tracking when loan is closed
+            totalBorrowed -= loan.principalAmount;
+            _updateUtilizationStats();
+            
             domaProtocol.safeTransferFrom(address(this), loan.borrower, loan.domainTokenId);
             emit LoanFullyRepaid(loanId, msg.sender);
         }
@@ -326,6 +350,10 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
         
         loan.isActive = false;
         loan.isLiquidated = true;
+        
+        // Update utilization tracking when loan is liquidated
+        totalBorrowed -= loan.principalAmount;
+        _updateUtilizationStats();
         
         uint256 totalOwed = LoanCalculations.calculateTotalOwed(loan);
         
@@ -367,16 +395,51 @@ contract DomaLend is ReentrancyGuard, Ownable, IERC721Receiver {
     
     // ============ Interest Rate Functions ============
     
-    function calculateInterestRate(uint256 duration) public pure returns (uint256) {
+    function calculateInterestRate(uint256 duration) public view returns (uint256) {
         uint256 baseRate = BASE_INTEREST_RATE; // 8% annual base rate
         
         // Risk premium decreases with longer duration (research-based approach)
-        if (duration < 1 hours) return baseRate + 4200;     // 50% annual (high risk premium)
-        if (duration < 6 hours) return baseRate + 2200;     // 30% annual  
-        if (duration < 1 days) return baseRate + 1200;      // 20% annual
-        if (duration < 7 days) return baseRate + 700;       // 15% annual
-        if (duration < 30 days) return baseRate + 200;      // 10% annual
-        return baseRate;                                     // 8% annual (30+ days)
+        if (duration < 1 hours) baseRate += 4200;     // 50% annual (high risk premium)
+        else if (duration < 6 hours) baseRate += 2200;     // 30% annual  
+        else if (duration < 1 days) baseRate += 1200;      // 20% annual
+        else if (duration < 7 days) baseRate += 700;       // 15% annual
+        else if (duration < 30 days) baseRate += 200;      // 10% annual
+        // else: 8% annual (30+ days)
+        
+        // Add utilization premium to prevent gaming
+        uint256 utilizationPremium = calculateUtilizationPremium();
+        
+        return baseRate + utilizationPremium;
+    }
+    
+    function calculateUtilizationPremium() public view returns (uint256) {
+        if (totalLiquidity == 0) return 0;
+        
+        // Calculate utilization rate in basis points (0-10000)
+        uint256 utilizationRate = (totalBorrowed * 10000) / totalLiquidity;
+        
+        // Exponential curve: premium = utilization² * maxPremium / 100²
+        // At 100% utilization: premium = 10000² * 4200 / 10000² = 4200 (42%)
+        uint256 premium = (utilizationRate * utilizationRate * MAX_UTILIZATION_PREMIUM) / (10000 * 10000);
+        
+        return premium;
+    }
+    
+    function getUtilizationStats() external view returns (
+        uint256 borrowed,
+        uint256 liquidity, 
+        uint256 utilizationRate,
+        uint256 utilizationPremium
+    ) {
+        borrowed = totalBorrowed;
+        liquidity = totalLiquidity;
+        utilizationRate = liquidity > 0 ? (borrowed * 10000) / liquidity : 0;
+        utilizationPremium = calculateUtilizationPremium();
+    }
+    
+    function _updateUtilizationStats() internal {
+        uint256 utilizationRate = totalLiquidity > 0 ? (totalBorrowed * 10000) / totalLiquidity : 0;
+        emit UtilizationUpdated(totalBorrowed, totalLiquidity, utilizationRate);
     }
     
     function previewLoanTerms(uint256 amount, uint256 duration) 
