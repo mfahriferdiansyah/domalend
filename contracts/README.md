@@ -1,66 +1,75 @@
-## Foundry
+# DomaLend Smart Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Smart contracts for the DomaLend domain-collateralized lending platform on Doma Protocol.
 
-Foundry consists of:
+## Overview
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+DomaLend enables domain owners to use their tokenized domains as collateral for USDC loans, while allowing users to stake USDC and earn yield from loan repayments through a points-based system.
 
-## Documentation
+## Contracts
 
-https://book.getfoundry.sh/
+- **DomaLend.sol** - Main contract handling staking, loans, and Dutch auctions
+- **MockUSDC.sol** - Mock USDC token for testing (6 decimals)
+- **MockDoma.sol** - Mock domain NFT contract for testing
+- **MockOracle.sol** - Mock AI oracle for domain scoring
 
-## Usage
+## Key Features
 
-### Build
+- **1:1 Points System** - Stake 1 USDC to earn 1 point
+- **Pro-rata Distribution** - Loan repayments distributed proportionally to point holders
+- **Dutch Auctions** - Liquidations start at 2x loan amount, decrease 1% daily
+- **Domain Collateral** - NFT domains held as collateral until loan repaid
 
-```shell
-$ forge build
+## Setup
+
+1. Install Foundry:
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 ```
 
-### Test
-
-```shell
-$ forge test
+2. Install dependencies:
+```bash
+forge install
 ```
 
-### Format
-
-```shell
-$ forge fmt
+3. Set up environment:
+```bash
+cp .env.example .env
+# Add your private key to .env
 ```
 
-### Gas Snapshots
+## Development
 
-```shell
-$ forge snapshot
+Build contracts:
+```bash
+forge build
 ```
 
-### Anvil
-
-```shell
-$ anvil
+Run tests:
+```bash
+forge test
 ```
 
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+Deploy to Doma testnet:
+```bash
+forge script script/Deploy.s.sol --rpc-url doma --broadcast
 ```
 
-### Cast
+## Testing
 
-```shell
-$ cast <subcommand>
-```
+The test suite covers:
+- Staking and unstaking USDC for points
+- Requesting loans with domain collateral
+- Repaying loans and automatic distribution
+- Dutch auction liquidation mechanics
+- Points-based yield distribution
 
-### Help
+All tests are passing with comprehensive coverage of core functionality.
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## Architecture
+
+- Single contract design for simplicity
+- OpenZeppelin contracts for security (ERC20, ERC721, ReentrancyGuard, Ownable)
+- Event-driven for easy indexing with Ponder
+- Simple 1:1 points system eliminates complex yield calculations

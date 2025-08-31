@@ -2,5 +2,20 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc_version = "0.8.20"
+optimizer = true
+optimizer_runs = 10000
+via_ir = true
+
+# Fork configuration for testing with real Doma Protocol
+# This allows tests to run against actual deployed contracts
+# Uncomment these lines to enable automatic forking for all tests:
+# fork_url = "https://rpc-testnet.doma.xyz"
+# fork_block_number = 1000000 # Pin to specific block for deterministic tests
+gas_limit = 30_000_000 # Higher gas limit for fork testing
+
+[rpc_endpoints]
+doma = "https://rpc-testnet.doma.xyz"
+doma_testnet = "https://rpc-testnet.doma.xyz"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
