@@ -18,8 +18,8 @@ export interface CachedDomainScore {
 @Injectable()
 export class DomainScoreCacheService {
   private readonly logger = new Logger(DomainScoreCacheService.name);
-  private readonly DEFAULT_CACHE_HOURS = 24; // Default score freshness: 24 hours
-  private readonly RATE_LIMIT_MINUTES = 5; // Minimum time between rescoring same domain
+  private readonly DEFAULT_CACHE_HOURS = 7 * 24; // Default score freshness: 7 days
+  private readonly RATE_LIMIT_MINUTES = 7 * 24 * 60; // Minimum time between rescoring same domain (7 days)
   private readonly recentScoringMap = new Map<string, number>(); // Track recent scoring requests
 
   constructor(

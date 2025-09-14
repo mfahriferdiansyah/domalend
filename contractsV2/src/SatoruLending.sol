@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/IAIOracle.sol";
 import "./interfaces/ILoanManager.sol";
@@ -358,6 +359,28 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         require(params.campaignDuration > 0, "Campaign duration cannot be zero");
         require(params.requestedAmount > 0, "Requested amount cannot be zero");
 
+        // Calculate campaign deadline
+        uint256 campaignDeadline = block.timestamp + params.campaignDuration;
+
+        // Validate repayment deadline is not in the past
+        require(params.repaymentDeadline > block.timestamp,
+            "INVALID_TIMELINE: Repayment deadline cannot be in the past");
+
+        // CRITICAL: Ensure repayment deadline is after campaign deadline to prevent underflow
+        require(params.repaymentDeadline > campaignDeadline,
+            string(abi.encodePacked(
+                "INVALID_TIMELINE: Repayment deadline (",
+                Strings.toString(params.repaymentDeadline),
+                ") must be after campaign deadline (",
+                Strings.toString(campaignDeadline),
+                "). Current time: ",
+                Strings.toString(block.timestamp)
+            )));
+
+        // Sanity check: Ensure minimum loan duration (1 second for testing)
+        require(params.repaymentDeadline >= campaignDeadline + MIN_LOAN_DURATION,
+            "INVALID_TIMELINE: Minimum loan duration required");
+
         (bool eligible, string memory reason) = _validateDomainEligibility(msg.sender, params.domainTokenId);
         require(eligible, reason);
 
@@ -371,7 +394,7 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         request.domainTokenId = params.domainTokenId;
         request.requestedAmount = params.requestedAmount;
         request.proposedInterestRate = params.proposedInterestRate;
-        request.campaignDeadline = block.timestamp + params.campaignDuration;
+        request.campaignDeadline = campaignDeadline;
         request.repaymentDeadline = params.repaymentDeadline;
         request.aiScore = aiScore;
         request.domainExpiration = domaProtocol.expirationOf(params.domainTokenId);
@@ -398,28 +421,43 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         require(block.timestamp < request.campaignDeadline, "Campaign expired");
         require(amount > 0, "Amount must be positive");
 
-        // Calculate remaining amount needed - use SafeMath to prevent underflow
-        require(request.totalFunded < request.requestedAmount, "Loan request already fully funded");
+        // Check if already fully funded before any calculations
+        if (request.totalFunded >= request.requestedAmount) {
+            revert("Loan request already fully funded");
+        }
+
+        // Calculate remaining amount needed with overflow protection
         uint256 remainingAmount = request.requestedAmount - request.totalFunded;
 
         // Cap the amount to what's actually needed
         uint256 actualAmount = amount > remainingAmount ? remainingAmount : amount;
-        require(actualAmount > 0, "No funding needed");
 
+        // Additional safety check
+        require(actualAmount > 0, "No funding needed");
+        require(actualAmount <= remainingAmount, "Amount exceeds remaining");
+
+        // Track new contributor
         if (request.contributions[msg.sender] == 0) {
             request.contributors.push(msg.sender);
         }
 
+        // Update contribution tracking BEFORE totalFunded to ensure consistency
         request.contributions[msg.sender] += actualAmount;
-        request.totalFunded += actualAmount;
 
+        // Update total funded with overflow check
+        uint256 newTotalFunded = request.totalFunded + actualAmount;
+        require(newTotalFunded <= request.requestedAmount, "Total funding would exceed requested amount");
+        request.totalFunded = newTotalFunded;
+
+        // Transfer funds after all state updates
         usdc.safeTransferFrom(msg.sender, address(this), actualAmount);
 
-        bool isFullyFunded = request.totalFunded >= request.requestedAmount;
+        // Check if fully funded
+        bool isFullyFunded = request.totalFunded == request.requestedAmount;
 
         // Calculate remaining amount safely for emission
         uint256 remainingAmountForEmit = 0;
-        if (request.totalFunded < request.requestedAmount) {
+        if (!isFullyFunded) {
             remainingAmountForEmit = request.requestedAmount - request.totalFunded;
         }
 
@@ -432,6 +470,7 @@ contract SatoruLending is Ownable, ReentrancyGuard {
             isFullyFunded
         );
 
+        // Execute loan if fully funded
         if (isFullyFunded) {
             _executeLoanRequest(requestId);
         }
@@ -644,15 +683,22 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         LoanRequest storage request = loanRequests[requestId];
         require(!request.isExecuted, "Already executed");
 
+        // CRITICAL: Double-check deadline ordering to prevent underflow with clear error message
+        require(request.repaymentDeadline > request.campaignDeadline,
+            "UNDERFLOW_PREVENTION: Repayment deadline must be after campaign deadline");
+
         request.isExecuted = true;
         request.isActive = false;
+
+        // Calculate duration safely after validation
+        uint256 loanDuration = request.repaymentDeadline - request.campaignDeadline;
 
         ILoanManager.CreateLoanParams memory loanParams = ILoanManager.CreateLoanParams({
             borrower: request.borrower,
             domainTokenId: request.domainTokenId,
             loanAmount: request.requestedAmount,
             interestRate: request.proposedInterestRate,
-            duration: request.repaymentDeadline - request.campaignDeadline,
+            duration: loanDuration,
             aiScore: request.aiScore,
             poolId: 0,
             requestId: requestId

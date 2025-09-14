@@ -62,9 +62,17 @@ contract DeployScript is Script {
         // 5. Configure contract connections
         console.log("\n5. Configuring contract connections...");
 
+        // Set LoanManager address in SatoruLending
+        satoruLending.setLoanManager(address(loanManager));
+        console.log("SatoruLending connected to LoanManager");
+
         // Set DutchAuction address in LoanManager
         loanManager.setDutchAuction(address(dutchAuction));
         console.log("LoanManager connected to DutchAuction");
+
+        // Set deployer as authorized backend for AIOracle (for testing)
+        aiOracle.setBackendService(deployer);
+        console.log("AIOracle backend service set to deployer");
 
         vm.stopBroadcast();
 
@@ -77,11 +85,11 @@ contract DeployScript is Script {
         console.log("DutchAuction:  ", address(dutchAuction));
         console.log("=====================================");
 
-        // Verification commands
-        console.log("\nVerification commands:");
-        console.log("forge verify-contract", address(aiOracle), "src/AIOracle.sol:AIOracle --chain-id 97476");
-        console.log("forge verify-contract", address(satoruLending), "src/SatoruLending.sol:SatoruLending --chain-id 97476");
-        console.log("forge verify-contract", address(loanManager), "src/LoanManager.sol:LoanManager --chain-id 97476");
-        console.log("forge verify-contract", address(dutchAuction), "src/DutchAuction.sol:DutchAuction --chain-id 97476");
+        // Verification commands (Blockscout)
+        console.log("\nVerification commands (Blockscout):");
+        console.log("forge verify-contract --rpc-url https://rpc-testnet.doma.xyz --verifier blockscout --verifier-url 'https://explorer-testnet.doma.xyz/api/'", address(aiOracle), "src/AIOracle.sol:AIOracle");
+        console.log("forge verify-contract --rpc-url https://rpc-testnet.doma.xyz --verifier blockscout --verifier-url 'https://explorer-testnet.doma.xyz/api/'", address(satoruLending), "src/SatoruLending.sol:SatoruLending");
+        console.log("forge verify-contract --rpc-url https://rpc-testnet.doma.xyz --verifier blockscout --verifier-url 'https://explorer-testnet.doma.xyz/api/'", address(loanManager), "src/LoanManager.sol:LoanManager");
+        console.log("forge verify-contract --rpc-url https://rpc-testnet.doma.xyz --verifier blockscout --verifier-url 'https://explorer-testnet.doma.xyz/api/'", address(dutchAuction), "src/DutchAuction.sol:DutchAuction");
     }
 }

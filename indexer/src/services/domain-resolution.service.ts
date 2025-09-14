@@ -68,54 +68,47 @@ export class DomainResolutionService {
   /**
    * Resolve domain token ID to domain name
    * PRIMARY METHOD for tokenId → domain name conversion
+   * FIXED: Uses metadata API pattern instead of non-existent getDomainName()
    */
   async resolveDomainName(tokenId: bigint): Promise<string> {
     try {
       console.log(`[DomainResolver] Resolving tokenId: ${tokenId}`);
-      
-      // Method 1: Try getDomainName function (if available)
-      try {
-        const domainName = await this.client.readContract({
-          address: this.domaProtocolAddress,
-          abi: DOMA_PROTOCOL_ABI,
-          functionName: 'getDomainName',
-          args: [tokenId],
-        }) as string;
-        
-        if (domainName && domainName.length > 0) {
-          console.log(`[DomainResolver] ✅ Resolved ${tokenId} → ${domainName}`);
-          return domainName;
-        }
-      } catch (error) {
-        console.warn(`[DomainResolver] getDomainName failed for ${tokenId}:`, error);
+
+      // Get tokenURI from contract
+      const tokenURI = await this.client.readContract({
+        address: this.domaProtocolAddress,
+        abi: DOMA_PROTOCOL_ABI,
+        functionName: 'tokenURI',
+        args: [tokenId],
+      }) as string;
+
+      if (!tokenURI) {
+        throw new Error('No tokenURI returned');
       }
-      
-      // Method 2: Try tokenURI and parse metadata
-      try {
-        const tokenURI = await this.client.readContract({
-          address: this.domaProtocolAddress,
-          abi: DOMA_PROTOCOL_ABI,
-          functionName: 'tokenURI',
-          args: [tokenId],
-        }) as string;
-        
-        const domainName = this.parseDomainFromURI(tokenURI);
-        if (domainName && domainName !== 'unknown.domain') {
-          console.log(`[DomainResolver] ✅ Parsed ${tokenId} → ${domainName} (from URI)`);
-          return domainName;
-        }
-      } catch (error) {
-        console.warn(`[DomainResolver] tokenURI failed for ${tokenId}:`, error);
+
+      console.log(`[DomainResolver] Got tokenURI for ${tokenId}: ${tokenURI}`);
+
+      // Fetch metadata JSON from tokenURI
+      const response = await fetch(tokenURI);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
-      // Method 3: Fallback - generate placeholder
-      const fallbackName = `domain-${tokenId}.unknown`;
-      console.warn(`[DomainResolver] ⚠️ Using fallback for ${tokenId} → ${fallbackName}`);
-      return fallbackName;
-      
+
+      const metadata = await response.json();
+
+      // Extract domain name from metadata
+      const domainName = metadata.name || metadata.domain || metadata.title;
+
+      if (domainName && domainName.length > 0) {
+        console.log(`[DomainResolver] ✅ Resolved ${tokenId} → ${domainName}`);
+        return domainName;
+      }
+
+      throw new Error('No domain name found in metadata');
+
     } catch (error) {
       console.error(`[DomainResolver] ❌ Resolution failed for ${tokenId}:`, error);
-      return `domain-${tokenId}.error`;
+      throw error;
     }
   }
 
@@ -134,16 +127,18 @@ export class DomainResolutionService {
     
     return results
       .map((result, index) => {
+        const tokenId = tokenIds[index];
         if (result.status === 'fulfilled') {
           return result.value;
         } else {
-          console.error(`[DomainResolver] Batch resolve failed for ${tokenIds[index]}:`, result.reason);
+          console.error(`[DomainResolver] Batch resolve failed for ${tokenId}:`, result.reason);
           return {
-            tokenId: tokenIds[index],
-            domainName: `domain-${tokenIds[index]}.error`
+            tokenId: tokenId || 0n,
+            domainName: `domain-${tokenId || 0}.error`
           };
         }
-      });
+      })
+      .filter(result => result.tokenId !== 0n); // Filter out invalid entries
   }
 
   /**
@@ -181,7 +176,11 @@ export class DomainResolutionService {
       
       // Format 1: data:application/json;base64,{encoded}
       if (uri.startsWith('data:application/json;base64,')) {
-        const encoded = uri.split(',')[1];
+        const parts = uri.split(',');
+        if (parts.length < 2) return 'malformed.domain';
+
+        const encoded = parts[1];
+        if (!encoded) return 'invalid.domain';
         const decoded = atob(encoded);
         const metadata = JSON.parse(decoded);
         

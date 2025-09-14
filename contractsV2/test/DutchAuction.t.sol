@@ -111,7 +111,7 @@ contract DutchAuctionTest is Test {
     function testConstants() public {
         assertEq(dutchAuction.DAILY_DECREASE_RATE(), 100);
         assertEq(dutchAuction.MIN_AUCTION_DURATION(), 7 days);
-        assertEq(dutchAuction.MAX_AUCTION_DURATION(), 30 days);
+        assertEq(dutchAuction.MAX_AUCTION_DURATION(), 100 days);
         assertEq(dutchAuction.STARTING_PRICE_MULTIPLIER(), 200);
         assertEq(dutchAuction.MIN_BID_INCREMENT(), 50);
     }
@@ -181,9 +181,11 @@ contract DutchAuctionTest is Test {
         vm.warp(block.timestamp + 30 days);
 
         uint256 currentPrice = dutchAuction.getCurrentPrice(auctionId);
-        uint256 expectedReservePrice = (LOAN_AMOUNT * 60) / 100; // 60% for score 75
+        // After 30 days with 1% daily decline: 100% - 30% = 70% of starting price
+        uint256 startingPrice = (LOAN_AMOUNT * 200) / 100;
+        uint256 expectedPrice = (startingPrice * 70) / 100;
 
-        assertEq(currentPrice, expectedReservePrice);
+        assertEq(currentPrice, expectedPrice);
     }
 
     function testPlaceBidValid() public {
@@ -221,7 +223,7 @@ contract DutchAuctionTest is Test {
         uint256 lowBid = currentPrice - 1;
 
         vm.prank(bidder1);
-        vm.expectRevert("Bid below minimum");
+        vm.expectRevert("Bid below current price");
         dutchAuction.placeBid(auctionId, lowBid);
     }
 
@@ -244,7 +246,7 @@ contract DutchAuctionTest is Test {
         uint256 currentPrice = dutchAuction.getCurrentPrice(auctionId);
 
         // Skip past auction end
-        vm.warp(block.timestamp + 31 days);
+        vm.warp(block.timestamp + 101 days);
 
         vm.prank(bidder1);
         vm.expectRevert("Auction expired");
@@ -268,7 +270,7 @@ contract DutchAuctionTest is Test {
         uint256 auctionId = _createAuction();
 
         // Skip past auction end
-        vm.warp(block.timestamp + 31 days);
+        vm.warp(block.timestamp + 101 days);
 
         vm.prank(bidder1);
         dutchAuction.endAuction(auctionId);
@@ -334,7 +336,7 @@ contract DutchAuctionTest is Test {
         vm.prank(bidder1);
         (isValid, reason) = dutchAuction.validateBid(auctionId, currentPrice - 1);
         assertFalse(isValid);
-        assertEq(reason, "Bid below minimum");
+        assertEq(reason, "Bid below current price");
 
         // Invalid bid - borrower
         vm.prank(borrower);
@@ -411,7 +413,7 @@ contract DutchAuctionTest is Test {
         assertEq(domainTokenId, DOMAIN_TOKEN_ID);
         assertEq(startingPrice, (LOAN_AMOUNT * 200) / 100);
         assertGt(currentPrice, 0);
-        assertEq(reservePrice, (LOAN_AMOUNT * 60) / 100);
+        assertEq(reservePrice, 0); // No reserve price - maximum market discovery
         assertGt(endTime, block.timestamp);
         assertEq(highestBidder, address(0));
         assertTrue(isActive);
@@ -432,7 +434,7 @@ contract DutchAuctionTest is Test {
         uint256 auctionIdHigh = dutchAuction.startAuction(paramsHigh);
 
         (, , , uint256 reservePriceHigh, , , ) = dutchAuction.getAuctionInfo(auctionIdHigh);
-        assertEq(reservePriceHigh, (LOAN_AMOUNT * 80) / 100); // 80% for high score
+        assertEq(reservePriceHigh, 0); // No reserve price - maximum market discovery
 
         // Test low score (<50)
         mockDoma.mint(address(mockLoanManager), 3);
@@ -449,7 +451,7 @@ contract DutchAuctionTest is Test {
         uint256 auctionIdLow = dutchAuction.startAuction(paramsLow);
 
         (, , , uint256 reservePriceLow, , , ) = dutchAuction.getAuctionInfo(auctionIdLow);
-        assertEq(reservePriceLow, (LOAN_AMOUNT * 40) / 100); // 40% for low score
+        assertEq(reservePriceLow, 0); // No reserve price - maximum market discovery
     }
 
     function testAuctionDoesNotExist() public {

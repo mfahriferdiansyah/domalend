@@ -16,12 +16,14 @@ export const DutchAuction_ABI = [
   },
   {
     type: 'event',
-    name: 'AuctionBidPlaced',
+    name: 'BidPlaced',
     inputs: [
       { name: 'auctionId', type: 'uint256', indexed: true },
       { name: 'bidder', type: 'address', indexed: true },
       { name: 'bidAmount', type: 'uint256', indexed: false },
       { name: 'currentPrice', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
+      { name: 'isWinningBid', type: 'bool', indexed: false },
     ],
   },
   {
@@ -29,9 +31,13 @@ export const DutchAuction_ABI = [
     name: 'AuctionEnded',
     inputs: [
       { name: 'auctionId', type: 'uint256', indexed: true },
-      { name: 'winner', type: 'address', indexed: true },
-      { name: 'finalPrice', type: 'uint256', indexed: false },
+      { name: 'loanId', type: 'uint256', indexed: true },
       { name: 'domainTokenId', type: 'uint256', indexed: true },
+      { name: 'winner', type: 'address', indexed: false },
+      { name: 'finalPrice', type: 'uint256', indexed: false },
+      { name: 'loanAmount', type: 'uint256', indexed: false },
+      { name: 'surplus', type: 'uint256', indexed: false },
+      { name: 'endTimestamp', type: 'uint256', indexed: false },
     ],
   },
   {
@@ -40,6 +46,15 @@ export const DutchAuction_ABI = [
     inputs: [
       { name: 'auctionId', type: 'uint256', indexed: true },
       { name: 'reason', type: 'string', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'BidRefunded',
+    inputs: [
+      { name: 'auctionId', type: 'uint256', indexed: true },
+      { name: 'bidder', type: 'address', indexed: true },
+      { name: 'refundAmount', type: 'uint256', indexed: false },
     ],
   },
   // Functions (minimal for interaction)

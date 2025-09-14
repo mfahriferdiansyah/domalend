@@ -19,8 +19,8 @@ export class IndexerController {
     try {
       this.logger.log(`[Indexer] Scoring request for: ${domain}`);
       
-      // Use database-first approach with 24-hour cache and rate limiting
-      const scoreData = await this.domainScoreCacheService.getDomainScore(domain, 24);
+      // Use database-first approach with 7-day cache and rate limiting
+      const scoreData = await this.domainScoreCacheService.getDomainScore(domain, 7 * 24);
       const rateLimitInfo = this.domainScoreCacheService.getRateLimitInfo(domain);
       
       // Return format expected by indexer
@@ -89,7 +89,7 @@ export class IndexerController {
 
     try {
       // Use efficient batch processing with database-first approach
-      const batchResults = await this.domainScoreCacheService.batchGetDomainScores(testDomains, 24);
+      const batchResults = await this.domainScoreCacheService.batchGetDomainScores(testDomains, 7 * 24);
       
       // Transform to expected format
       const results = {};

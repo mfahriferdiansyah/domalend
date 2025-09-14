@@ -20,12 +20,40 @@ export interface BackendApiResponse {
   riskScore?: number;
 }
 
+export interface ScoreSubmissionRequest {
+  domainTokenId: string;
+  score: number;
+  domainName: string;
+  confidence: number;
+  reasoning: string;
+}
+
+export interface ScoreSubmissionResponse {
+  success: boolean;
+  txHash?: string;
+  error?: string;
+}
+
+export interface LiquidationRequest {
+  loanId: string;
+  domainTokenId: string;
+  borrowerAddress: string;
+  domainName?: string;
+}
+
+export interface LiquidationResponse {
+  success: boolean;
+  txHash?: string;
+  auctionId?: string;
+  error?: string;
+}
+
 export class BackendApiService {
   private baseUrl: string;
   private timeout: number;
 
   constructor() {
-    this.baseUrl = process.env.BACKEND_API_URL || 'http://localhost:3000';
+    this.baseUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
     this.timeout = parseInt(process.env.BACKEND_TIMEOUT || '30000');
   }
 
@@ -43,7 +71,7 @@ export class BackendApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
       
-      const response = await fetch(`${this.baseUrl}/domains/${domainName}/score`, {
+      const response = await fetch(`${this.baseUrl}/api/v2/indexer/domains/${domainName}/score`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +86,7 @@ export class BackendApiService {
         throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
       }
       
-      const data: BackendApiResponse = await response.json();
+      const data = await response.json() as BackendApiResponse;
       const duration = Date.now() - startTime;
       
       // Validate response format
@@ -96,7 +124,7 @@ export class BackendApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout * 2); // Double timeout for batch
       
-      const response = await fetch(`${this.baseUrl}/domains/bulk-test`, {
+      const response = await fetch(`${this.baseUrl}/api/v2/indexer/bulk-test`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,11 +140,11 @@ export class BackendApiService {
         throw new Error(`Batch API error: ${response.status} ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const data = await response.json() as Record<string, BackendApiResponse>;
       const duration = Date.now() - startTime;
-      
+
       console.log(`[BackendAPI] ✅ Batch scored ${domains.length} domains (${duration}ms)`);
-      
+
       // Map responses back to domains
       return domains.map(domain => ({
         domain,
@@ -145,10 +173,10 @@ export class BackendApiService {
    */
   async getScoringStatus(domainName: string): Promise<{hasScore: boolean, lastScored?: string, score?: number}> {
     try {
-      const response = await fetch(`${this.baseUrl}/domains/${domainName}/status`);
+      const response = await fetch(`${this.baseUrl}/api/v2/indexer/domains/${domainName}/status`);
       
       if (response.ok) {
-        return await response.json();
+        return await response.json() as {hasScore: boolean, lastScored?: string, score?: number};
       }
       
       // If endpoint doesn't exist, assume no status tracking
@@ -198,15 +226,109 @@ export class BackendApiService {
   }
 
   /**
+   * Submit score to smart contract via backend
+   */
+  async submitScore(request: ScoreSubmissionRequest): Promise<ScoreSubmissionResponse> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`[BackendAPI] Requesting score submission for ${request.domainName} (${request.score})`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseUrl}/api/v2/api/contracts/submit-score`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Score submission failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json() as ScoreSubmissionResponse;
+      const duration = Date.now() - startTime;
+
+      console.log(`[BackendAPI] ✅ Score submitted for ${request.domainName}: TX ${data.txHash} (${duration}ms)`);
+
+      return data;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[BackendAPI] ❌ Score submission failed for ${request.domainName} (${duration}ms):`, error);
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Request liquidation via backend
+   */
+  async liquidateLoan(request: LiquidationRequest): Promise<LiquidationResponse> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`[BackendAPI] Requesting liquidation for loan ${request.loanId}`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseUrl}/api/v2/contracts/liquidate-loan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Liquidation failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json() as LiquidationResponse;
+      const duration = Date.now() - startTime;
+
+      console.log(`[BackendAPI] ✅ Liquidation submitted for loan ${request.loanId}: TX ${data.txHash} (${duration}ms)`);
+
+      return data;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[BackendAPI] ❌ Liquidation failed for loan ${request.loanId} (${duration}ms):`, error);
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
    * Health check for backend API
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
+      const response = await fetch(`${this.baseUrl}/api/v2/indexer/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000), // 5 second timeout
       });
-      
+
       return response.ok;
     } catch (error) {
       console.warn('[BackendAPI] Health check failed:', error);

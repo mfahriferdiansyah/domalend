@@ -38,6 +38,10 @@ export class WalletService {
     return this.wallet.address;
   }
 
+  getWallet(): ethers.Wallet {
+    return this.wallet;
+  }
+
   async getBalance(address?: string): Promise<WalletBalance> {
     try {
       const targetAddress = address || this.wallet.address;

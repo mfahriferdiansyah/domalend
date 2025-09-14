@@ -16,7 +16,7 @@ export const scoringEvent = onchainTable(
     backendCallTimestamp: t.timestamp(),
     submissionTimestamp: t.timestamp(),
     completionTimestamp: t.timestamp(),
-    status: t.text().notNull(), // 'pending', 'backend_called', 'submitted', 'completed', 'failed'
+    status: t.text().notNull(), // 'pending', 'backend_called', 'submitted', 'completed', 'failed', 'batch_requested', 'invalidated', 'backend_updated', 'emergency_paused', 'emergency_unpaused'
     errorMessage: t.text(),
     retryCount: t.integer().notNull().default(0),
     processingDurationMs: t.integer(),
@@ -33,7 +33,7 @@ export const loanEvent = onchainTable(
   "loan_event", 
   (t) => ({
     id: t.text().primaryKey(),
-    eventType: t.text().notNull(), // 'created_instant', 'created_crowdfunded', 'repaid', 'liquidated'
+    eventType: t.text().notNull(), // 'created_instant', 'created_crowdfunded', 'repaid_full', 'repaid_partial', 'liquidated', 'defaulted', 'collateral_locked', 'collateral_released'
     loanId: t.text(),
     requestId: t.text(),
     borrowerAddress: t.hex().notNull(),
@@ -88,6 +88,55 @@ export const auctionEvent = onchainTable(
     auctionIdIndex: index().on(table.auctionId),
     domainTokenIdIndex: index().on(table.domainTokenId),
     eventTypeIndex: index().on(table.eventType),
+  })
+);
+
+// Loan Requests from SatoruLending (Crowdfunding)
+export const loanRequest = onchainTable(
+  "loan_request",
+  (t) => ({
+    id: t.text().primaryKey(),
+    requestId: t.text().notNull(),
+    borrowerAddress: t.hex().notNull(),
+    domainTokenId: t.text().notNull(),
+    domainName: t.text(),
+    requestedAmount: t.text().notNull(),
+    proposedInterestRate: t.integer().notNull(),
+    aiScore: t.integer(),
+    campaignDeadline: t.timestamp().notNull(),
+    totalFunded: t.text().notNull().default("0"),
+    contributorCount: t.integer().notNull().default(0),
+    status: t.text().notNull().default("active"), // 'active', 'funded', 'executed', 'cancelled'
+    eventTimestamp: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    requestIdIndex: index().on(table.requestId),
+    borrowerIndex: index().on(table.borrowerAddress),
+    domainTokenIdIndex: index().on(table.domainTokenId),
+    statusIndex: index().on(table.status),
+  })
+);
+
+// Loan Request Funding Events
+export const loanFunding = onchainTable(
+  "loan_funding",
+  (t) => ({
+    id: t.text().primaryKey(),
+    requestId: t.text().notNull(),
+    contributorAddress: t.hex().notNull(),
+    contributionAmount: t.text().notNull(),
+    totalFunded: t.text().notNull(),
+    remainingAmount: t.text().notNull(),
+    isFullyFunded: t.boolean().notNull(),
+    eventTimestamp: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    requestIdIndex: index().on(table.requestId),
+    contributorIndex: index().on(table.contributorAddress),
   })
 );
 
@@ -151,5 +200,51 @@ export const domainAnalytics = onchainTable(
   (table) => ({
     domainTokenIdIndex: index().on(table.domainTokenId),
     latestAiScoreIndex: index().on(table.latestAiScore),
+  })
+);
+
+// System Events for tracking contract configuration changes
+export const systemEvent = onchainTable(
+  "system_event",
+  (t) => ({
+    id: t.text().primaryKey(),
+    eventType: t.text().notNull(), // 'backend_updated', 'emergency_pause', 'emergency_unpause', 'config_change'
+    contractAddress: t.hex().notNull(),
+    triggeredBy: t.hex().notNull(),
+    oldValue: t.text(),
+    newValue: t.text(),
+    reason: t.text(),
+    eventTimestamp: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    eventTypeIndex: index().on(table.eventType),
+    contractAddressIndex: index().on(table.contractAddress),
+    eventTimestampIndex: index().on(table.eventTimestamp),
+  })
+);
+
+// Batch Operations for tracking batch scoring requests
+export const batchOperation = onchainTable(
+  "batch_operation",
+  (t) => ({
+    id: t.text().primaryKey(),
+    operationType: t.text().notNull(), // 'batch_scoring', 'batch_submission'
+    requestedBy: t.hex().notNull(),
+    batchSize: t.integer().notNull(),
+    completedCount: t.integer().notNull().default(0),
+    failedCount: t.integer().notNull().default(0),
+    status: t.text().notNull(), // 'pending', 'completed', 'failed', 'partial'
+    requestTimestamp: t.timestamp().notNull(),
+    completionTimestamp: t.timestamp(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    operationTypeIndex: index().on(table.operationType),
+    requestedByIndex: index().on(table.requestedBy),
+    statusIndex: index().on(table.status),
+    requestTimestampIndex: index().on(table.requestTimestamp),
   })
 );

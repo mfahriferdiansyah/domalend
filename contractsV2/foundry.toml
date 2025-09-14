@@ -11,8 +11,7 @@ via_ir = true
 doma_testnet = "https://rpc-testnet.doma.xyz"
 mainnet = "${ETH_RPC_URL}"
 
-[etherscan]
-doma_testnet = { key = "${ETHERSCAN_API_KEY}", url = "https://explorer-testnet.doma.xyz/api" }
+# Using Blockscout for verification instead of Etherscan
 
 # Doma Testnet Configuration
 [profile.doma]

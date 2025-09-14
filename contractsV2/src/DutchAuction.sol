@@ -48,7 +48,7 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
     // Auction parameters
     uint256 public constant DAILY_DECREASE_RATE = 100; // 1% per day (in basis points)
     uint256 public constant MIN_AUCTION_DURATION = 7 days;
-    uint256 public constant MAX_AUCTION_DURATION = 30 days;
+    uint256 public constant MAX_AUCTION_DURATION = 100 days;
     uint256 public constant STARTING_PRICE_MULTIPLIER = 200; // 2x loan amount
     uint256 public constant MIN_BID_INCREMENT = 50; // 0.5% minimum bid increase
 
@@ -219,8 +219,16 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         uint256 currentPrice = _calculateCurrentPrice(auctionId);
         uint256 minimumBid = getMinimumBid(auctionId);
 
-        require(bidAmount >= minimumBid, "Bid below minimum");
-        require(bidAmount >= currentPrice, "Bid below current price");
+        // In Dutch auctions, the minimum should never exceed current price
+        // If there's a previous bid, require increment OR current price, whichever is lower
+        if (auction.highestBidder != address(0)) {
+            // There's a previous bidder - use minimum increment OR current price, whichever is lower
+            uint256 effectiveMinimum = minimumBid < currentPrice ? minimumBid : currentPrice;
+            require(bidAmount >= effectiveMinimum, "Bid below effective minimum");
+        } else {
+            // No previous bidder - just use current price
+            require(bidAmount >= currentPrice, "Bid below current price");
+        }
 
         // Transfer USDC from bidder
         usdc.safeTransferFrom(msg.sender, address(this), bidAmount);
@@ -337,9 +345,19 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
             return (false, "Borrower cannot bid");
         }
 
+        uint256 currentPrice = _calculateCurrentPrice(auctionId);
         uint256 minimumBid = getMinimumBid(auctionId);
-        if (bidAmount < minimumBid) {
-            return (false, "Bid below minimum");
+
+        // Use same logic as placeBid for consistency
+        if (auction.highestBidder != address(0)) {
+            uint256 effectiveMinimum = minimumBid < currentPrice ? minimumBid : currentPrice;
+            if (bidAmount < effectiveMinimum) {
+                return (false, "Bid below effective minimum");
+            }
+        } else {
+            if (bidAmount < currentPrice) {
+                return (false, "Bid below current price");
+            }
         }
 
         return (true, "");
@@ -442,27 +460,25 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         }
 
         uint256 timeElapsed = block.timestamp - auction.startTime;
-        uint256 totalDuration = auction.endTime - auction.startTime;
 
-        // Calculate price decrease: startingPrice * (1 - (timeElapsed / totalDuration) * maxDecreaseRate)
-        // maxDecreaseRate is the maximum decrease over the entire auction duration
-        uint256 maxDecreaseRate = 7000; // 70% max decrease over 30 days (approx 1% per day * 30)
-        uint256 priceDecrease = (auction.startingPrice * timeElapsed * maxDecreaseRate) / (totalDuration * 10000);
+        // Calculate price decrease: startingPrice * (timeElapsed / 1 day) * 1%
+        // Decline rate: exactly 1% per day for 100 days to reach $0
+        uint256 dailyDecreaseRate = 100; // 1% in basis points
+        uint256 priceDecrease = (auction.startingPrice * timeElapsed * dailyDecreaseRate) / (1 days * 10000);
+
+        // Ensure price doesn't go below zero (after 100 days)
+        if (priceDecrease >= auction.startingPrice) {
+            return 0;
+        }
 
         uint256 currentPrice = auction.startingPrice - priceDecrease;
-
-        // Ensure price doesn't go below reserve
-        return currentPrice > auction.reservePrice ? currentPrice : auction.reservePrice;
+        return currentPrice;
     }
 
     function _calculateReservePrice(uint256 loanAmount, uint256 aiScore) internal pure returns (uint256) {
-        if (aiScore >= 80) {
-            return (loanAmount * 80) / 100; // 80% for high score
-        } else if (aiScore >= 50) {
-            return (loanAmount * 60) / 100; // 60% for medium score
-        } else {
-            return (loanAmount * 40) / 100; // 40% for low score
-        }
+        // Maximum market discovery: no reserve price floor
+        // Allow auctions to decline all the way to $0
+        return 0;
     }
 
     function _calculateStartingPrice(uint256 loanAmount) internal pure returns (uint256) {
@@ -541,6 +557,26 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
             );
         }
     }
+
+    // Emergency rescue function for stuck NFTs (onlyOwner)
+    function emergencyRescueNFT(
+        address nftContract,
+        uint256 tokenId,
+        address recipient
+    ) external onlyOwner {
+        require(recipient != address(0), "Invalid recipient");
+        IERC721(nftContract).safeTransferFrom(address(this), recipient, tokenId);
+
+        emit EmergencyRescue(nftContract, tokenId, recipient, block.timestamp);
+    }
+
+    // Emergency rescue event
+    event EmergencyRescue(
+        address indexed nftContract,
+        uint256 indexed tokenId,
+        address indexed recipient,
+        uint256 timestamp
+    );
 
     // IERC721Receiver implementation
     function onERC721Received(

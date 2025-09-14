@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Body, Query, Logger } from '@nestjs/commo
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { DomainScoringService } from '../services/domain-scoring.service';
 import { HybridScoringService } from '../services/hybrid-scoring.service';
+import { DomainScoreCacheService } from '../services/domain-score-cache.service';
 
 @ApiTags('domains')
 @Controller('domains')
@@ -11,27 +12,50 @@ export class ScoringController {
   constructor(
     private readonly domainScoringService: DomainScoringService,
     private readonly hybridScoringService: HybridScoringService,
+    private readonly domainScoreCacheService: DomainScoreCacheService,
   ) {}
 
   @Get('score')
-  @ApiOperation({ summary: 'Get AI-powered domain analysis by domain name' })
+  @ApiOperation({ summary: 'Get AI-powered domain analysis by domain name with 7-day caching' })
   @ApiQuery({ name: 'domain', description: 'Domain name (e.g., cocacola.com)', example: 'cocacola.com' })
-  @ApiResponse({ status: 200, description: 'Complete domain analysis with AI scoring' })
+  @ApiResponse({ status: 200, description: 'Complete domain analysis with AI scoring, cached for 7 days' })
   async getDomainAnalysis(@Query('domain') domain: string) {
     if (!domain) {
       return { error: 'Domain parameter is required' };
     }
 
     try {
-      this.logger.log(`Starting AI domain analysis for: ${domain}`);
-      const analysis = await this.hybridScoringService.generateStandardizedScore(domain);
-      return analysis;
+      this.logger.log(`[User] AI domain analysis request for: ${domain}`);
+
+      // Use the same caching service as indexer for consistency
+      const cachedScore = await this.domainScoreCacheService.getDomainScore(domain, 7 * 24);
+
+      if (cachedScore.isFromCache) {
+        this.logger.log(`[User] ✅ Returning cached score for ${domain} (age: ${cachedScore.cacheAge}m)`);
+      } else {
+        this.logger.log(`[User] ✅ Generated fresh score for ${domain}`);
+      }
+
+      // Return the full standardized format by calling the hybrid service directly with the domain
+      // This ensures we get the complete analysis structure
+      const fullAnalysis = await this.hybridScoringService.generateStandardizedScore(domain);
+
+      // Add cache metadata to the response for transparency
+      return {
+        ...fullAnalysis,
+        _cacheInfo: {
+          isFromCache: cachedScore.isFromCache,
+          cacheAge: cachedScore.cacheAge,
+          rateLimited: false // User endpoint doesn't have rate limiting
+        }
+      };
+
     } catch (error) {
-      this.logger.error(`AI domain analysis failed for ${domain}:`, error.message);
-      return { 
-        error: 'Domain analysis failed', 
+      this.logger.error(`[User] AI domain analysis failed for ${domain}:`, error.message);
+      return {
+        error: 'Domain analysis failed',
         message: error.message,
-        domain 
+        domain
       };
     }
   }

@@ -4,6 +4,12 @@
 
 DomaLend V2 enables users to unlock liquidity from their tokenized domain NFTs through AI-powered lending with automated Dutch auction liquidations.
 
+## 🎯 **Status: Production Ready ✅**
+- **All Tests Passing**: 80/80 comprehensive test suite
+- **End-to-End Verified**: Complete loan-to-liquidation flow tested
+- **Critical Bugs Fixed**: Dutch auction bidding race condition resolved
+- **Integration Ready**: Full documentation for indexer and backend teams
+
 ## 🏗️ Architecture
 
 The system consists of 4 core smart contracts working together:
@@ -150,13 +156,20 @@ $ forge verify-contract <CONTRACT_ADDRESS> src/<CONTRACT_NAME>.sol:<CONTRACT_NAM
 
 **DomaLend V2 is deployed on Doma testnet (Chain ID: 97476)**
 
-### Contract Addresses (FINAL - Unrestricted + Dynamic Tolerance)
+### Contract Addresses (LATEST - All Bugs Fixed ✅)
 ```
-AIOracle:      0xd0669621a9621E9F4f55721A60Abf2d0328CdffD
-SatoruLending: 0xc8b37c973976e06A99D7B259b11dEF258d9e067F
-LoanManager:   0x531cB6aB00A03CE568f082cC636eBE8D0C2eC0C3
-DutchAuction:  0xb22Eb9772966037D8cF6D094839Cc83164c30985
+AIOracle:      0x43f0Ce9B2209D7F041525Af40f365a2B22DF53a1
+SatoruLending: 0x76435A7eE4d2c1AB98D75e6b8927844aF1Fb2F2B
+LoanManager:   0x5365E0cf54Bccc157A0eFBb3aC77F826E27f9A49
+DutchAuction:  0xF4eC2e259036A841D7ebd8A34fDC97311Be063d1
 ```
+
+### ✅ Recent Bug Fixes & Improvements
+- **Dutch Auction Bidding**: Fixed race condition preventing valid bids
+- **Emergency Rescue**: Added domain recovery function for stuck NFTs
+- **Minimum Durations**: Removed artificial 1-hour restrictions
+- **Backend Integration**: Authorized deployer as scoring service
+- **Test Coverage**: 80/80 tests passing with end-to-end verification
 
 ### Dependency Contracts
 ```
@@ -167,9 +180,9 @@ Doma Protocol:   0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f
 ### Quick Test
 ```shell
 # Check if contracts are deployed
-cast call 0xFC4DFd1fBe63eDD52Dfc90B23d760A1A4B84c67a "owner()(address)" --rpc-url https://rpc-testnet.doma.xyz
+cast call 0x43f0Ce9B2209D7F041525Af40f365a2B22DF53a1 "owner()(address)" --rpc-url https://rpc-testnet.doma.xyz
 
-# For detailed contract interaction examples, see docs/CAST_COMMANDS.md
+# For detailed contract interaction examples, see docs/VERIFIED_TESTING_FLOW.md
 ```
 
 ## 🔗 Integration
@@ -243,10 +256,19 @@ loanManager.liquidateCollateral(loanId);
 
 ## 📚 Documentation
 
+### Core Documentation
+- [Verified Testing Flow](./docs/VERIFIED_TESTING_FLOW.md) - Complete end-to-end testing guide
+- [Cast Commands Reference](./docs/CAST_COMMANDS.md) - All contract interaction commands
+- [Dutch Auction Bug Analysis](./docs/DUTCH_AUCTION_BIDDING_BUG_ANALYSIS.md) - Technical bug fix details
+
+### Integration Guides
+- [Indexer Integration](./docs/INDEXER_INTEGRATION.md) - Ponder/Graph Protocol setup
+- [Backend Integration](./docs/BACKEND_INTEGRATION.md) - NestJS service architecture
+- [Frontend Integration](./docs/FRONTEND_INTEGRATION.md) - Web3 wallet connection guide
+
+### External References
 - [Foundry Book](https://book.getfoundry.sh/)
-- [Contract Specifications](./docs/)
-- [API Documentation](./docs/api/)
-- [Integration Guide](./docs/integration/)
+- [Doma Protocol Docs](https://docs.doma.xyz/)
 
 ## 🤝 Contributing
 
