@@ -8,6 +8,7 @@ import { DomainModule } from './modules/domain/domain.module';
 import { AiModule } from './modules/ai/ai.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { HealthModule } from './modules/health/health.module';
+import { LiquidationModule } from './modules/liquidation/liquidation.module';
 
 // Core Modules
 import { DatabaseModule } from './core/database/database.module';
@@ -48,6 +49,7 @@ import configuration from './config/configuration';
     AiModule,
     ContractsModule,
     HealthModule,
+    LiquidationModule,
   ],
 })
 export class AppModule {}

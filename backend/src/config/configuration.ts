@@ -25,6 +25,7 @@ export default () => ({
     aiOracleAddress: process.env.AI_ORACLE_ADDRESS,
     domaLendAddress: process.env.DOMALEND_ADDRESS,
     domaOwnershipToken: process.env.DOMA_OWNERSHIP_TOKEN,
+    loanManagerAddress: process.env.LOAN_MANAGER_ADDRESS || '0x5365E0cf54Bccc157A0eFBb3aC77F826E27f9A49',
   },
 
   // External APIs Configuration

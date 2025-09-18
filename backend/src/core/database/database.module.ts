@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 // Entities
 import { DomainScore } from './entities/domain-score.entity';
 import { ScoringHistory } from './entities/scoring-history.entity';
+import { LiquidationTracking } from './entities/liquidation-tracking.entity';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { ScoringHistory } from './entities/scoring-history.entity';
       useFactory: (configService: ConfigService) => {
         const dbConfig: any = {
           type: configService.get('database.type', 'sqlite') as 'sqlite' | 'postgres',
-          entities: [DomainScore, ScoringHistory],
+          entities: [DomainScore, ScoringHistory, LiquidationTracking],
           synchronize: configService.get('database.synchronize', true),
           logging: configService.get('database.logging', false),
           autoLoadEntities: true,
@@ -35,7 +36,7 @@ import { ScoringHistory } from './entities/scoring-history.entity';
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([DomainScore, ScoringHistory]),
+    TypeOrmModule.forFeature([DomainScore, ScoringHistory, LiquidationTracking]),
   ],
   exports: [TypeOrmModule],
 })
