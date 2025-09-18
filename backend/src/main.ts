@@ -40,12 +40,9 @@ async function bootstrap() {
       .setTitle('DomaLend API')
       .setDescription('AI-powered domain scoring and lending platform API')
       .setVersion('1.0')
-      .addTag('domains', 'Domain scoring and valuation')
-      .addTag('indexer', 'Indexer integration endpoints')
-      .addTag('ai', 'AI services and configuration')
-      .addTag('blockchain', 'Smart contract interactions')
-      .addTag('external', 'External API integrations')
-      .addTag('health', 'System health checks')
+      .addTag('domains', 'Domain Management & Scoring')
+      .addTag('contracts', 'Smart Contract Operations')
+      .addTag('system', 'System Health & Monitoring')
       .build();
 
     const document = SwaggerModule.createDocument(app, config);

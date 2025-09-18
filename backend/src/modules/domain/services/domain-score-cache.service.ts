@@ -35,7 +35,7 @@ export class DomainScoreCacheService {
    * 3. Generate new score if missing or expired
    * 4. Save new score to database
    */
-  async getDomainScore(domainName: string, maxCacheHours: number = this.DEFAULT_CACHE_HOURS): Promise<CachedDomainScore> {
+  async getDomainScore(domainName: string, maxCacheHours: number = this.DEFAULT_CACHE_HOURS, tokenId?: string): Promise<CachedDomainScore> {
     const startTime = Date.now();
 
     try {
@@ -95,7 +95,7 @@ export class DomainScoreCacheService {
       const aiAnalysis = await this.hybridScoringService.generateStandardizedScore(domainName);
 
       // 3. Save to database for future use
-      const savedScore = await this.saveToDatabase(domainName, aiAnalysis);
+      const savedScore = await this.saveToDatabase(domainName, aiAnalysis, tokenId);
       
       const duration = Date.now() - startTime;
       this.logger.log(`[Fresh Score] ${domainName}: ${aiAnalysis.totalScore} (${duration}ms)`);
@@ -199,12 +199,12 @@ export class DomainScoreCacheService {
   /**
    * Save domain score to database
    */
-  private async saveToDatabase(domainName: string, aiAnalysis: any): Promise<DomainScore> {
+  private async saveToDatabase(domainName: string, aiAnalysis: any, tokenId?: string): Promise<DomainScore> {
     const scoreExpiry = new Date();
     scoreExpiry.setHours(scoreExpiry.getHours() + this.DEFAULT_CACHE_HOURS);
 
     const domainScore = this.domainScoreRepository.create({
-      tokenId: `${domainName}-${Date.now()}`, // Unique ID for each score
+      tokenId: tokenId || `${domainName}-${Date.now()}`, // Use real tokenId if available, otherwise generate
       domainName,
       totalScore: aiAnalysis.totalScore,
       ageScore: aiAnalysis.technicalScore?.domainAgeScore || 0,

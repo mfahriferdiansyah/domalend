@@ -48,7 +48,6 @@ export class DomaNftService {
 
     const domaAbi = [
       'function balanceOf(address owner) view returns (uint256)',
-      'function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)',
       'function ownerOf(uint256 tokenId) view returns (address)',
       'function tokenURI(uint256 tokenId) view returns (string)',
       'function expirationOf(uint256 tokenId) view returns (uint256)',
@@ -64,23 +63,96 @@ export class DomaNftService {
   }
 
   /**
-   * Get NFT balance for an address (cast-like approach)
+   * Get NFT balance and details for an address
    */
-  async getNFTBalanceForAddress(address: string): Promise<{ address: string; balance: number; note: string }> {
+  async getNFTBalanceForAddress(address: string): Promise<{ address: string; balance: number; ownedNFTs: DomaNFT[]; note: string }> {
     try {
-      this.logger.log(`Getting NFT balance for address: ${address}`);
+      this.logger.log(`Getting NFT balance and details for address: ${address}`);
 
+      // First, try to get NFTs from Doma Explorer API
+      try {
+        // Try both explorer URLs (dev and testnet)
+        const explorerUrls = [
+          `https://explorer-doma-dev-ix58nm4rnd.t.conduit.xyz/api/v2/addresses/${address}/nft?type=ERC-721`,
+          `https://explorer-testnet.doma.xyz/api/v2/addresses/${address}/nft?type=ERC-721`
+        ];
+
+        for (const explorerUrl of explorerUrls) {
+          try {
+            this.logger.log(`Fetching NFTs from Doma Explorer: ${explorerUrl}`);
+
+            const response = await firstValueFrom(
+              this.httpService.get(explorerUrl, {
+                timeout: 10000,
+                headers: { 'accept': 'application/json' }
+              })
+            );
+
+            if (response.data?.items) {
+              const ownedNFTs: DomaNFT[] = [];
+
+              for (const instance of response.data.items) {
+                // Filter for DOMA contract only
+                if (instance.token?.address?.toLowerCase() === this.domaContractAddress.toLowerCase()) {
+                  const nft: DomaNFT = {
+                    tokenId: instance.id,
+                    owner: address,
+                    name: instance.metadata?.name || 'Unknown',
+                    description: instance.metadata?.description || 'Domain Ownership Token',
+                    image: instance.metadata?.image || instance.image_url || '',
+                    externalUrl: instance.metadata?.external_url || instance.external_app_url || '',
+                    attributes: instance.metadata?.attributes || [],
+                  };
+
+                  // Parse attributes
+                  if (instance.metadata?.attributes) {
+                    for (const attr of instance.metadata.attributes) {
+                      if (attr.trait_type === 'Expiration Date' && attr.display_type === 'date') {
+                        nft.expirationDate = Number(attr.value);
+                      } else if (attr.trait_type === 'TLD') {
+                        nft.tld = String(attr.value);
+                      } else if (attr.trait_type === 'Character Length') {
+                        nft.characterLength = Number(attr.value);
+                      } else if (attr.trait_type === 'Registrar') {
+                        nft.registrar = String(attr.value);
+                      }
+                    }
+                  }
+
+                  ownedNFTs.push(nft);
+                }
+              }
+
+              const balance = ownedNFTs.length;
+              this.logger.log(`Successfully fetched ${balance} NFTs from Doma Explorer for ${address}`);
+
+              return {
+                address,
+                balance,
+                ownedNFTs,
+                note: `Address owns ${balance} NFT(s) from Doma Explorer`
+              };
+            }
+          } catch (error) {
+            this.logger.warn(`Failed to fetch from ${explorerUrl}: ${error.message}`);
+            // Continue to next URL
+          }
+        }
+      } catch (explorerError) {
+        this.logger.warn(`Failed to fetch from all Doma Explorer endpoints, falling back to contract methods: ${explorerError.message}`);
+      }
+
+      // Fallback to contract balance check if Explorer API fails
       const balance = await this.domaContract.balanceOf(address);
       const balanceNumber = Number(balance);
 
-      this.logger.log(`Address ${address} owns ${balanceNumber} NFTs`);
+      this.logger.log(`Address ${address} owns ${balanceNumber} NFTs (from contract fallback)`);
 
       return {
         address,
         balance: balanceNumber,
-        note: balanceNumber > 0
-          ? `Address owns ${balanceNumber} NFT(s). Use batch verification with known token IDs to get details.`
-          : 'Address owns no NFTs'
+        ownedNFTs: [],
+        note: `Address owns ${balanceNumber} NFT(s), but metadata unavailable (Explorer API failed)`
       };
     } catch (error) {
       this.logger.error(`Error getting NFT balance for address ${address}:`, error.message);
@@ -88,46 +160,6 @@ export class DomaNftService {
     }
   }
 
-  /**
-   * Verify which tokens from a list are owned by an address (cast-like batch approach)
-   */
-  async verifyTokenOwnership(address: string, tokenIds: string[]): Promise<DomaNFT[]> {
-    try {
-      this.logger.log(`Verifying ownership of ${tokenIds.length} tokens for address: ${address}`);
-
-      const nfts: DomaNFT[] = [];
-
-      // Batch check ownership using simple ownerOf calls (like cast commands)
-      const ownershipPromises = tokenIds.map(async (tokenId) => {
-        try {
-          const owner = await this.domaContract.ownerOf(tokenId);
-          if (owner.toLowerCase() === address.toLowerCase()) {
-            this.logger.log(`Token ${tokenId} is owned by ${address}`);
-            return await this.getNFTByTokenId(tokenId);
-          }
-          return null;
-        } catch (error) {
-          this.logger.warn(`Failed to check ownership of token ${tokenId}: ${error.message}`);
-          return null;
-        }
-      });
-
-      const results = await Promise.all(ownershipPromises);
-
-      // Filter out null results
-      for (const nft of results) {
-        if (nft) {
-          nfts.push(nft);
-        }
-      }
-
-      this.logger.log(`Found ${nfts.length} NFTs owned by ${address} from ${tokenIds.length} checked`);
-      return nfts;
-    } catch (error) {
-      this.logger.error(`Error verifying token ownership for ${address}:`, error.message);
-      throw new Error(`Failed to verify token ownership: ${error.message}`);
-    }
-  }
 
   /**
    * Get NFT details by token ID

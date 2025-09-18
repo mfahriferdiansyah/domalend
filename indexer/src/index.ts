@@ -58,50 +58,52 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
     });
     console.log(`✅ [AIOracle] Database insert successful`);
 
-    // 2. Resolve domain name from tokenId
-    const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
-    console.log(`📍 [AIOracle] Resolved ${domainTokenId} → ${domainName}`);
-    
-    // Update database with domain name
+    // 2. Call intelligent submit-score endpoint with just tokenId
+    console.log(`📝 [AIOracle] Requesting backend to handle complete scoring pipeline...`);
+
+    // Update database status
     await context.db.update(scoringEvent, {
       id: eventId
     }).set({
-      domainName,
       status: 'backend_called',
       backendCallTimestamp: new Date(),
     });
 
-    // 3. Get AI score from backend
-    const scoreData = await backendApi.scoreDomain(domainName);
-    console.log(`🎯 [AIOracle] Backend scored ${domainName}: ${scoreData.totalScore}/100 (confidence: ${scoreData.confidence}%)`);
-
-    // 4. Request backend to submit score to AIOracle contract
+    // 3. Backend handles: tokenId → metadata → domain → cache → scoring → contract submission
+    let submitResponse;
     let txHash = '';
+    let domainName = '';
+    let scoreData = { totalScore: 0, confidence: 0, reasoning: '' };
+
     try {
-      console.log(`📝 [AIOracle] Requesting backend to submit score to contract...`);
+      submitResponse = await backendApi.submitScoreByTokenId({ tokenId: domainTokenId.toString() });
 
-      const submitResponse = await backendApi.submitScore({
-        domainTokenId: domainTokenId.toString(),
-        score: scoreData.totalScore,
-        domainName: domainName,
-        confidence: scoreData.confidence,
-        reasoning: scoreData.reasoning
-      });
-
-      txHash = submitResponse.txHash || '';
-      console.log(`✅ [AIOracle] Backend submitted score! TX: ${txHash}`);
+      if (submitResponse.success) {
+        txHash = submitResponse.txHash || '';
+        domainName = submitResponse.domainName || `domain-${domainTokenId}`;
+        scoreData = {
+          totalScore: submitResponse.score || 0,
+          confidence: 90, // Default confidence
+          reasoning: submitResponse.message || 'AI-powered domain scoring'
+        };
+        console.log(`✅ [AIOracle] Backend completed scoring pipeline for ${domainName}: ${scoreData.totalScore}/100 - TX: ${txHash}`);
+      } else {
+        throw new Error(submitResponse.error || 'Backend submission failed');
+      }
     } catch (contractError) {
-      console.error(`❌ [AIOracle] Backend score submission failed:`, contractError);
-      // Continue processing even if contract submission fails
+      console.error(`❌ [AIOracle] Backend scoring pipeline failed:`, contractError);
+      domainName = `domain-${domainTokenId}`; // Fallback domain name
+      // Continue processing to record the failure
     }
 
-    // 5. Update database with completion
+    // 4. Update database with completion
     const endTime = Date.now();
     const processingDuration = endTime - startTime;
-    
+
     await context.db.update(scoringEvent, {
       id: eventId
     }).set({
+      domainName,
       aiScore: scoreData.totalScore,
       confidence: scoreData.confidence,
       reasoning: scoreData.reasoning,
@@ -112,7 +114,7 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
       processingDurationMs: processingDuration,
     });
 
-    // 6. Update domain analytics
+    // 5. Update domain analytics
     await updateDomainAnalytics(
       context,
       domainTokenId,

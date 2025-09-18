@@ -1,6 +1,5 @@
-import { Controller, Get, Post, Param, Body, Query, Logger } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
-import { DomainScoringService } from '../services/domain-scoring.service';
+import { Controller, Get, Query, Logger } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { HybridScoringService } from '../services/hybrid-scoring.service';
 import { DomainScoreCacheService } from '../services/domain-score-cache.service';
 
@@ -10,7 +9,6 @@ export class ScoringController {
   private readonly logger = new Logger(ScoringController.name);
 
   constructor(
-    private readonly domainScoringService: DomainScoringService,
     private readonly hybridScoringService: HybridScoringService,
     private readonly domainScoreCacheService: DomainScoreCacheService,
   ) {

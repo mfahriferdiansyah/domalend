@@ -9,9 +9,13 @@ import { WalletService } from './services/wallet.service';
 // Controllers - only the ContractController
 import { ContractController } from './controllers/contract.controller';
 
+// Domain Module for NFT and scoring services
+import { DomainModule } from '../domain/domain.module';
+
 @Module({
   imports: [
     ConfigModule,
+    DomainModule,
   ],
   providers: [
     SmartContractService,

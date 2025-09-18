@@ -10,7 +10,6 @@ import { DomainScore } from '../../core/database/entities/domain-score.entity';
 import { ScoringHistory } from '../../core/database/entities/scoring-history.entity';
 
 // Services
-import { DomainScoringService } from './services/domain-scoring.service';
 import { DomainMetadataService } from './services/domain-metadata.service';
 import { DomainAnalysisService } from './services/domain-analysis.service';
 import { DomainValidationService } from './services/domain-validation.service';
@@ -30,7 +29,6 @@ import { ScoringController } from './controllers/scoring.controller';
     AiModule,
   ],
   providers: [
-    DomainScoringService,
     DomainMetadataService,
     DomainAnalysisService,
     DomainValidationService,
@@ -43,7 +41,6 @@ import { ScoringController } from './controllers/scoring.controller';
     ScoringController,
   ],
   exports: [
-    DomainScoringService,
     DomainMetadataService,
     DomainAnalysisService,
     HybridScoringService,

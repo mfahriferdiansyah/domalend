@@ -17,7 +17,6 @@ import {
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 // Services
-import { DomainScoringService, ScoreBreakdown } from '../services/domain-scoring.service';
 import { DomaNftService } from '../services/doma-nft.service';
 
 // DTOs
@@ -34,19 +33,26 @@ export class DomainController {
   private readonly logger = new Logger(DomainController.name);
 
   constructor(
-    private readonly domainScoringService: DomainScoringService,
     private readonly domaNftService: DomaNftService,
   ) {}
 
   @Get('nft/:tokenId')
-  @ApiOperation({ summary: 'Get NFT details by token ID' })
-  @ApiParam({ name: 'tokenId', description: 'Domain token ID' })
+  @ApiOperation({
+    summary: 'Get domain NFT details by token ID',
+    description: 'Retrieve detailed information about a specific domain NFT including metadata, expiration status, and attributes. This endpoint fetches data directly from the blockchain.'
+  })
+  @ApiParam({
+    name: 'tokenId',
+    description: 'Domain token ID (large integer representing the domain hash)',
+    example: '54344964066288468101530659531467425324551312134658892013131579195659464473615'
+  })
   @ApiResponse({
     status: 200,
     description: 'NFT details retrieved successfully',
     type: NFTDetailsResponseDto
   })
-  @ApiResponse({ status: 404, description: 'NFT not found' })
+  @ApiResponse({ status: 404, description: 'NFT not found or does not exist on the blockchain' })
+  @ApiResponse({ status: 500, description: 'Internal server error or blockchain connection failed' })
   async getNFTByTokenId(@Param('tokenId') tokenId: string): Promise<NFTDetailsResponseDto> {
     this.logger.log(`Fetching NFT details for token ID: ${tokenId}`);
 
@@ -79,14 +85,22 @@ export class DomainController {
   }
 
   @Get('address/:address')
-  @ApiOperation({ summary: 'Get NFT balance for an address' })
-  @ApiParam({ name: 'address', description: 'Ethereum address' })
+  @ApiOperation({
+    summary: 'Get all domain NFTs owned by an address',
+    description: 'Retrieve all domain NFTs owned by a specific Ethereum address. This endpoint uses the Doma Explorer API for efficient data retrieval with full metadata.'
+  })
+  @ApiParam({
+    name: 'address',
+    description: 'Ethereum wallet address (42-character hex string starting with 0x)',
+    example: '0x47B245f2A3c7557d855E4d800890C4a524a42Cc8'
+  })
   @ApiResponse({
     status: 200,
-    description: 'NFT balance retrieved successfully',
+    description: 'NFT balance and list retrieved successfully from Doma Explorer API',
     type: AddressNFTBalanceDto
   })
-  @ApiResponse({ status: 400, description: 'Invalid address format' })
+  @ApiResponse({ status: 400, description: 'Invalid Ethereum address format' })
+  @ApiResponse({ status: 500, description: 'Explorer API unavailable or blockchain connection failed' })
   async getNFTBalanceByAddress(@Param('address') address: string): Promise<AddressNFTBalanceDto> {
     this.logger.log(`Getting NFT balance for address: ${address}`);
 
@@ -105,31 +119,4 @@ export class DomainController {
     }
   }
 
-  @Get(':domain/score')
-  @ApiOperation({ summary: 'Get domain score by domain name' })
-  @ApiParam({ name: 'domain', description: 'Domain name (e.g., nike.com)' })
-  @ApiResponse({ status: 200, description: 'Domain score calculated successfully' })
-  @ApiResponse({ status: 404, description: 'Domain not found' })
-  async getDomainScoreByName(@Param('domain') domain: string): Promise<ScoreBreakdown> {
-    this.logger.log(`Calculating score for domain: ${domain}`);
-
-    try {
-      const score = await this.domainScoringService.scoreDomainByName(domain);
-
-      if (!score) {
-        throw new HttpException(
-          `Unable to score domain: ${domain}`,
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      return score;
-    } catch (error) {
-      this.logger.error(`Error scoring domain ${domain}:`, error.message);
-      throw new HttpException(
-        `Failed to score domain: ${error.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
 }

@@ -48,6 +48,20 @@ export interface LiquidationResponse {
   error?: string;
 }
 
+export interface SubmitScoreByTokenIdRequest {
+  tokenId: string;
+}
+
+export interface SubmitScoreByTokenIdResponse {
+  success: boolean;
+  txHash?: string;
+  score?: number;
+  domainName?: string;
+  cached?: boolean;
+  error?: string;
+  message?: string;
+}
+
 export class BackendApiService {
   private baseUrl: string;
   private timeout: number;
@@ -328,6 +342,58 @@ export class BackendApiService {
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[BackendAPI] ❌ Liquidation failed for loan ${request.loanId} (${duration}ms):`, error);
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Submit score by tokenId - new intelligent workflow
+   * Backend handles: tokenId → metadata → domain → cache check → scoring → contract submission
+   */
+  async submitScoreByTokenId(request: SubmitScoreByTokenIdRequest): Promise<SubmitScoreByTokenIdResponse> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`[BackendAPI] Requesting intelligent score submission for tokenId: ${request.tokenId}`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseUrl}/contracts/submit-score`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Score submission failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json() as SubmitScoreByTokenIdResponse;
+      const duration = Date.now() - startTime;
+
+      if (data.success) {
+        console.log(`[BackendAPI] ✅ Intelligent score submitted for tokenId ${request.tokenId}: ${data.domainName} (${data.score}) - TX ${data.txHash} (${duration}ms)`);
+      } else {
+        console.error(`[BackendAPI] ❌ Score submission failed for tokenId ${request.tokenId}: ${data.error} (${duration}ms)`);
+      }
+
+      return data;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[BackendAPI] ❌ Score submission failed for tokenId ${request.tokenId} (${duration}ms):`, error);
 
       return {
         success: false,

@@ -1,107 +1,5 @@
-import { IsArray, IsString, IsOptional, IsBoolean, ArrayMaxSize, ArrayMinSize } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { DomainMetadata } from '../services/domain-metadata.service';
-import { ScoreBreakdown } from '../services/domain-scoring.service';
 
-export class BatchScoreDto {
-  @ApiProperty({
-    description: 'Array of domain token IDs to score',
-    example: ['123456789', '987654321'],
-    maxItems: 50,
-    minItems: 1,
-  })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(50)
-  @IsString({ each: true })
-  tokenIds: string[];
-
-  @ApiProperty({
-    description: 'Use cached scores if available',
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  useCache?: boolean = true;
-}
-
-export class UpdateScoreDto {
-  @ApiProperty({
-    description: 'Domain token ID',
-    example: '123456789',
-  })
-  @IsString()
-  tokenId: string;
-
-  @ApiProperty({
-    description: 'Force refresh even if cache is valid',
-    example: false,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  forceRefresh?: boolean = false;
-}
-
-export class DomainInfoDto {
-  @ApiProperty({
-    description: 'Domain token ID',
-    example: '123456789',
-  })
-  tokenId: string;
-
-  @ApiProperty({
-    description: 'Domain metadata from Doma Protocol',
-  })
-  metadata: DomainMetadata;
-
-  @ApiProperty({
-    description: 'Domain score breakdown',
-    required: false,
-  })
-  score?: ScoreBreakdown;
-
-  @ApiProperty({
-    description: 'Last update timestamp',
-    example: '2025-01-01T12:00:00.000Z',
-  })
-  lastUpdated: string;
-}
-
-export class DomainSearchDto {
-  @ApiProperty({
-    description: 'Search query (domain name or partial match)',
-    example: 'example',
-  })
-  @IsString()
-  query: string;
-
-  @ApiProperty({
-    description: 'Minimum score threshold',
-    example: 50,
-    required: false,
-  })
-  @IsOptional()
-  minScore?: number;
-
-  @ApiProperty({
-    description: 'Maximum score threshold',
-    example: 90,
-    required: false,
-  })
-  @IsOptional()
-  maxScore?: number;
-
-  @ApiProperty({
-    description: 'TLD filter',
-    example: 'com',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  tld?: string;
-}
 
 export class DomaNFTAttributeDto {
   @ApiProperty({
@@ -210,48 +108,18 @@ export class AddressNFTBalanceDto {
   balance: number;
 
   @ApiProperty({
+    description: 'List of NFTs owned by the address from Doma contract',
+    type: [DomaNFTDto],
+  })
+  ownedNFTs: DomaNFTDto[];
+
+  @ApiProperty({
     description: 'Explanation note',
-    example: 'Address owns 1 NFT(s). Use batch verification with known token IDs to get details.',
+    example: 'Address owns 1 NFT(s), showing 1 with metadata',
   })
   note: string;
 }
 
-export class BatchVerificationRequestDto {
-  @ApiProperty({
-    description: 'Token IDs to verify ownership for',
-    example: ['54344964066288468101530659531467425324551312134658892013131579195659464473615'],
-    type: [String],
-  })
-  @IsArray()
-  @IsString({ each: true })
-  tokenIds: string[];
-}
-
-export class BatchVerificationResponseDto {
-  @ApiProperty({
-    description: 'Address that was checked',
-    example: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1',
-  })
-  address: string;
-
-  @ApiProperty({
-    description: 'Number of token IDs checked',
-    example: 5,
-  })
-  totalChecked: number;
-
-  @ApiProperty({
-    description: 'Number of NFTs owned by the address',
-    example: 2,
-  })
-  ownedCount: number;
-
-  @ApiProperty({
-    description: 'List of NFTs owned by the address',
-    type: [DomaNFTDto],
-  })
-  ownedNFTs: DomaNFTDto[];
-}
 
 export class NFTDetailsResponseDto {
   @ApiProperty({
