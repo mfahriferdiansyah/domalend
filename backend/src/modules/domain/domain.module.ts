@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 
+// AI Module for OpenAI integration
+import { AiModule } from '../ai/ai.module';
+
 // Entities
 import { DomainScore } from '../../core/database/entities/domain-score.entity';
-import { DomainValuation } from '../../core/database/entities/domain-valuation.entity';
 import { ScoringHistory } from '../../core/database/entities/scoring-history.entity';
 
 // Services
@@ -14,24 +16,18 @@ import { DomainAnalysisService } from './services/domain-analysis.service';
 import { DomainValidationService } from './services/domain-validation.service';
 import { HybridScoringService } from './services/hybrid-scoring.service';
 import { DomainScoreCacheService } from './services/domain-score-cache.service';
+import { DomaNftService } from './services/doma-nft.service';
 
 // Controllers
 import { DomainController } from './controllers/domain.controller';
 import { ScoringController } from './controllers/scoring.controller';
-import { IndexerController } from './controllers/indexer.controller';
 
-// External modules
-import { AiModule } from '../ai/ai.module';
-import { ExternalApiModule } from '../external-api/external-api.module';
-import { BlockchainModule } from '../blockchain/blockchain.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([DomainScore, DomainValuation, ScoringHistory]),
+    TypeOrmModule.forFeature([DomainScore, ScoringHistory]),
     HttpModule,
     AiModule,
-    ExternalApiModule,
-    BlockchainModule,
   ],
   providers: [
     DomainScoringService,
@@ -40,11 +36,11 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
     DomainValidationService,
     HybridScoringService,
     DomainScoreCacheService,
+    DomaNftService,
   ],
   controllers: [
     DomainController,
     ScoringController,
-    IndexerController,
   ],
   exports: [
     DomainScoringService,
@@ -52,6 +48,7 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
     DomainAnalysisService,
     HybridScoringService,
     DomainScoreCacheService,
+    DomaNftService,
   ],
 })
 export class DomainModule {}

@@ -102,11 +102,11 @@ export class DomainScoreCacheService {
 
       return {
         totalScore: aiAnalysis.totalScore,
-        confidence: aiAnalysis.confidenceLevel || 90,
-        reasoning: aiAnalysis.lendingRecommendation?.reasoning || `AI scored: ${aiAnalysis.totalScore}/100`,
-        brandScore: aiAnalysis.brandScore?.subtotal,
-        technicalScore: aiAnalysis.technicalScore?.subtotal,
-        riskScore: aiAnalysis.riskLevel === 'low' ? 90 : aiAnalysis.riskLevel === 'medium' ? 70 : 50,
+        confidence: aiAnalysis.confidence || 90,
+        reasoning: aiAnalysis.reasoning || `AI scored: ${aiAnalysis.totalScore}/100`,
+        brandScore: aiAnalysis.keywordScore,
+        technicalScore: aiAnalysis.lengthScore,
+        riskScore: aiAnalysis.ageScore,
         isFromCache: false,
         cacheAge: 0,
       };

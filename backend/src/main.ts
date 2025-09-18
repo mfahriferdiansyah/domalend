@@ -31,15 +31,15 @@ async function bootstrap() {
     }),
   );
 
-  // API prefix
-  app.setGlobalPrefix('api/v2');
+  // No API prefix - clean URLs
+  // app.setGlobalPrefix('api/v2');
 
   // Swagger documentation
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('DomaLend API v2')
+      .setTitle('DomaLend API')
       .setDescription('AI-powered domain scoring and lending platform API')
-      .setVersion('2.0')
+      .setVersion('1.0')
       .addTag('domains', 'Domain scoring and valuation')
       .addTag('indexer', 'Indexer integration endpoints')
       .addTag('ai', 'AI services and configuration')
@@ -49,9 +49,9 @@ async function bootstrap() {
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
+    SwaggerModule.setup('docs', app, document);
     
-    logger.log('📚 API Documentation available at: http://localhost:3001/api/docs');
+    logger.log('📚 API Documentation available at: http://localhost:3001/docs');
   }
 
   // Start server

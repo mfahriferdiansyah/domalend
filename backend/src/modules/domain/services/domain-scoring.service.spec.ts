@@ -10,13 +10,11 @@ import { KeywordAnalysisService } from '../../external-api/services/keyword-anal
 import { TrafficAnalysisService } from '../../external-api/services/traffic-analysis.service';
 import { SmartContractService } from '../../blockchain/services/smart-contract.service';
 import { DomainScore } from '../entities/domain-score.entity';
-import { DomainValuation } from '../entities/domain-valuation.entity';
 import { ScoringHistory } from '../entities/scoring-history.entity';
 
 describe('DomainScoringService', () => {
   let service: DomainScoringService;
   let domainScoreRepository: Repository<DomainScore>;
-  let domainValuationRepository: Repository<DomainValuation>;
   let scoringHistoryRepository: Repository<ScoringHistory>;
 
   const mockRepository = {
@@ -66,10 +64,6 @@ describe('DomainScoringService', () => {
           useValue: mockRepository,
         },
         {
-          provide: getRepositoryToken(DomainValuation),
-          useValue: mockRepository,
-        },
-        {
           provide: getRepositoryToken(ScoringHistory),
           useValue: mockRepository,
         },
@@ -103,9 +97,6 @@ describe('DomainScoringService', () => {
     service = module.get<DomainScoringService>(DomainScoringService);
     domainScoreRepository = module.get<Repository<DomainScore>>(
       getRepositoryToken(DomainScore),
-    );
-    domainValuationRepository = module.get<Repository<DomainValuation>>(
-      getRepositoryToken(DomainValuation),
     );
     scoringHistoryRepository = module.get<Repository<ScoringHistory>>(
       getRepositoryToken(ScoringHistory),
@@ -326,26 +317,4 @@ describe('DomainScoringService', () => {
     });
   });
 
-  describe('getDomainValuation', () => {
-    it('should calculate domain valuation based on score', async () => {
-      const tokenId = 1;
-      const mockScore = {
-        tokenId: 1,
-        totalScore: 85,
-        trafficScore: 18,
-        ageScore: 15,
-        lastUpdated: new Date(),
-      };
-
-      mockRepository.findOne.mockResolvedValue(mockScore);
-
-      const result = await service.getDomainValuation(tokenId);
-
-      expect(result).toBeDefined();
-      expect(result.estimatedValue).toBeGreaterThan(0);
-      expect(result.maxLoanAmount).toBeLessThanOrEqual(result.estimatedValue * 0.7);
-      expect(result).toHaveProperty('confidence');
-      expect(result).toHaveProperty('lastUpdated');
-    });
-  });
 });

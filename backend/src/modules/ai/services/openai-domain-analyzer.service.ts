@@ -95,31 +95,93 @@ export class OpenAIDomainAnalyzerService {
   }
 
   private buildComprehensivePrompt(domain: string): string {
-    return `Act as a domain valuer, you are professional domain auditor and give lending based on that domain collateral.
+    return `You are an elite domain valuation expert specializing in business intelligence for cryptocurrency lending. Focus PURELY on business value, brand recognition, and commercial potential. NO technical analysis.
 
-SCORING PHILOSOPHY:
-- As long as it's a branded and legit or profitable company: give super high score 95+
-- Potential domains like kick.com, 1.com, three.com, fun.com, time.fun: give them great score 75+  
-- Average domains like superlongandmulti.com: give it average like 40-70
-- Random or long or boring or useless and unbrandable: give it 0-30 or near 0
+🎯 ULTRA-PRECISE SCORING TIERS:
 
-CRITICAL REQUIREMENTS:
-- Respond ONLY with valid JSON (no markdown, no explanations outside JSON)
-- All scores must be integers between 0-100
-- Be precise with lending recommendations
-- Provide clear reasoning for scores
+🏆 TIER 1: LEGENDARY BRANDS (95-100 points)
+Examples: apple.com, google.com, cocacola.com, microsoft.com, amazon.com, netflix.com, tesla.com, facebook.com
+- Fortune 500/Global mega-corporations with trillion+ market caps
+- Household name recognition worldwide
+- Decades of established business presence
+- Massive revenue streams and brand equity
+- Zero business risk, maximum collateral value
+- Lending: 70-75% LTV, excellent collateral, -2% interest
 
-JSON SCHEMA (respond with exactly this structure):
+🚀 TIER 2: PREMIUM DOMAINS (80-94 points)
+Examples: one.com, kick.com, 1.com, 2.com, start.com, fun.com, time.com, shop.com, buy.com
+- Ultra-short (1-4 chars) or perfect generic terms
+- Massive brandability and commercial potential
+- Clear business applications across industries
+- High memorability and marketing value
+- Premium domain parking/development potential
+- Lending: 60-70% LTV, good collateral, -1% interest
+
+💼 TIER 3: QUALITY POTENTIAL (60-79 points)
+Examples: myshop.com, golfclub.com, restaurant.com, fitness.net, autoparts.org
+- Clear business intent and commercial application
+- Good brandability for specific industries
+- Established or emerging business categories
+- Reasonable memorability and marketing appeal
+- Solid commercial development potential
+- Lending: 45-60% LTV, fair collateral, 0% interest
+
+📊 TIER 4: AVERAGE DOMAINS (40-59 points)
+Examples: chihuahuamyydog.com, bestservices123.com, qualityproducts.org, myawesomecompany.net
+- Readable and understandable purpose
+- Longer but still brandable names
+- Moderate commercial appeal
+- Some market niche potential
+- Limited but viable business use cases
+- Lending: 30-45% LTV, fair collateral, +1% interest
+
+⚠️ TIER 5: WEAK READABLE (20-39 points)
+Examples: verylongdomainnamethatisstillreadable.com, my-super-long-business-name.net
+- Technically readable but too long/complex
+- Poor brandability due to length
+- Limited commercial appeal
+- Difficult to remember or market
+- Minimal business development potential
+- Lending: 20-30% LTV, poor collateral, +2% interest
+
+❌ TIER 6: BARELY READABLE (10-19 points)
+Examples: qwertykeyboard.com, randomwordscombined.net, mixedupphrasestogether.org
+- Technically words but poor combination
+- Very low brandability
+- Almost no commercial value
+- Difficult pronunciation/spelling
+- Pure speculation investment
+- Lending: 15-25% LTV, poor collateral, +3% interest
+
+🗑️ TIER 7: GARBAGE DOMAINS (0-9 points)
+Examples: aowkoaskdajsd.com, xkjfhskjfh.net, randomstring123.org, asdfghjkl.com
+- Complete gibberish or random characters
+- Zero commercial value
+- No brandability whatsoever
+- Pure domain spam/speculation
+- Lending: 10-15% LTV, very poor collateral, +5% interest
+
+🧠 ANALYSIS FRAMEWORK:
+
+1. BRAND RECOGNITION: Is this an established global/regional brand?
+2. BUSINESS LEGITIMACY: Real company vs domain speculation?
+3. COMMERCIAL POTENTIAL: Clear business applications and revenue paths?
+4. BRANDABILITY: Memorable, pronounceable, marketable?
+5. MARKET POSITION: Industry leadership or niche dominance?
+6. TRADEMARK RISK: Official brand vs potential infringement?
+7. FINANCIAL STABILITY: Company health and business sustainability?
+
+📋 REQUIRED JSON RESPONSE:
 
 {
   "totalScore": <0-100 integer>,
   "brandLegitimacy": <0-100 integer>,
-  "brandRecognition": <0-100 integer>, 
+  "brandRecognition": <0-100 integer>,
   "marketValue": <0-100 integer>,
   "businessLegitimacy": <0-100 integer>,
   "brandability": <0-100 integer>,
   "trustworthiness": <0-100 integer>,
-  
+
   "brandAnalysis": {
     "isOfficialBrand": true/false,
     "brandVariationType": "official/premium-generic/variation/random",
@@ -127,54 +189,44 @@ JSON SCHEMA (respond with exactly this structure):
     "trademarkRisk": <0-100 integer>,
     "brandEquityScore": <0-100 integer>
   },
-  
+
   "companyInfo": {
-    "name": "Company name",
-    "industry": "Primary industry", 
+    "name": "Company/Brand name",
+    "industry": "Primary industry/sector",
     "isPubliclyTraded": true/false
   },
-  
+
   "riskFactors": {
     "overallRisk": "low/medium/high",
     "financialStability": <0-100 integer>,
     "reputationRisk": <0-100 integer>,
     "legalRisk": <0-100 integer>
   },
-  
+
   "loanRecommendation": {
-    "recommendedLTV": <20-75 integer>,
-    "interestRateModifier": <-5 to +10 integer>,
+    "recommendedLTV": <10-75 integer>,
+    "interestRateModifier": <-2 to +5 integer>,
     "collateralQuality": "excellent/good/fair/poor",
-    "reasoning": "Brief explanation for score"
+    "reasoning": "Concise lending rationale"
   },
-  
+
   "confidenceScore": <0-100 integer>,
-  "analysisReasoning": "Why this score - be concise",
-  "positiveIndicators": ["List key strengths"],
-  "redFlags": ["List main concerns"]
+  "analysisReasoning": "Clear explanation of score rationale",
+  "positiveIndicators": ["Key business strengths"],
+  "redFlags": ["Major concerns or risks"]
 }
 
-EXAMPLES FOR CLARITY:
-
-MAJOR BRANDS (95-100 total score):
-- apple.com, google.com, cocacola.com, microsoft.com → totalScore: 95-100
-- Lending: 70-75% LTV, excellent collateral, -2% rate
-
-HIGH-POTENTIAL DOMAINS (75-85 total score):  
-- kick.com, one.com, three.com, fun.com, time.fun → totalScore: 75-85
-- Lending: 60-65% LTV, good collateral, -1% rate
-
-AVERAGE DOMAINS (40-70 total score):
-- superlongandmulti.com, mybusiness.net, restaurant123.com → totalScore: 40-70
-- Lending: 40-50% LTV, fair collateral, +0% rate
-
-RANDOM/POOR DOMAINS (0-30 total score):
-- aowkoaskdajsd.com, xkjfhskjfh.net, randomstring123.org → totalScore: 0-30
-- Lending: 20-25% LTV, poor collateral, +3% rate
+🚨 CRITICAL RULES:
+- ONLY business intelligence and brand analysis - NO technical domain factors
+- Be extremely precise with tier classifications
+- Major brands MUST score 95+, premium domains 80+
+- Focus on real business value and commercial potential
+- Consider trademark risks and legal implications
+- Provide conservative but accurate lending recommendations
 
 Domain to analyze: ${domain}
 
-IMPORTANT: The totalScore should be the primary indicator. Set brandLegitimacy, brandRecognition, marketValue, businessLegitimacy, and brandability to support the totalScore logically.`;
+Analyze this domain's business intelligence, brand value, and commercial potential to determine its precise tier classification and lending suitability.`;
   }
 
   private async callOpenAI(prompt: string): Promise<any> {

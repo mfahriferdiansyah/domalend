@@ -5,13 +5,11 @@ import { ConfigService } from '@nestjs/config';
 
 // Entities
 import { DomainScore } from '../../../core/database/entities/domain-score.entity';
-import { DomainValuation } from '../../../core/database/entities/domain-valuation.entity';
 import { ScoringHistory } from '../../../core/database/entities/scoring-history.entity';
 
 // Services
 import { DomainMetadataService, DomainMetadata } from './domain-metadata.service';
 import { DomainAnalysisService } from './domain-analysis.service';
-import { ExternalApiService } from '../../external-api/services/external-api.service';
 
 export interface ScoreBreakdown {
   totalScore: number;
@@ -26,13 +24,6 @@ export interface ScoreBreakdown {
   dataSource: string;
 }
 
-export interface DomainValuationResult {
-  estimatedValue: string; // bigint as string
-  maxLoanAmount: string;  // 50% LTV
-  confidenceLevel: number;
-  factors: string[];
-  valuationMethod: string;
-}
 
 @Injectable()
 export class DomainScoringService {
@@ -42,16 +33,12 @@ export class DomainScoringService {
     @InjectRepository(DomainScore)
     private readonly domainScoreRepository: Repository<DomainScore>,
     
-    @InjectRepository(DomainValuation)
-    private readonly domainValuationRepository: Repository<DomainValuation>,
-    
     @InjectRepository(ScoringHistory)
     private readonly scoringHistoryRepository: Repository<ScoringHistory>,
     
     private readonly configService: ConfigService,
     private readonly domainMetadataService: DomainMetadataService,
     private readonly domainAnalysisService: DomainAnalysisService,
-    private readonly externalApiService: ExternalApiService,
   ) {}
 
   /**
@@ -96,47 +83,6 @@ export class DomainScoringService {
     }
   }
 
-  /**
-   * Get domain valuation
-   */
-  async valuateDomain(tokenId: string, useCache: boolean = true): Promise<DomainValuationResult | null> {
-    try {
-      // Check cache first
-      if (useCache) {
-        const cachedValuation = await this.getCachedValuation(tokenId);
-        if (cachedValuation && this.isValuationCacheValid(cachedValuation)) {
-          this.logger.log(`Using cached valuation for domain ${tokenId}`);
-          return this.formatValuationResult(cachedValuation);
-        }
-      }
-
-      // Get score first
-      const scoreBreakdown = await this.scoreDomain(tokenId, useCache);
-      if (!scoreBreakdown) return null;
-
-      const metadata = await this.domainMetadataService.getDomainMetadata(tokenId);
-      if (!metadata) return null;
-
-      // Calculate valuation
-      const valuation = await this.calculateDomainValuation(metadata, scoreBreakdown);
-      
-      // Save to database
-      await this.saveValuationToDatabase(tokenId, metadata, valuation);
-      
-      // Log history
-      await this.logScoringHistory(tokenId, metadata, scoreBreakdown, 'valuation_update', true);
-
-      return valuation;
-
-    } catch (error) {
-      this.logger.error(`Error valuating domain ${tokenId}:`, error.message);
-      
-      // Log failed attempt
-      await this.logScoringHistory(tokenId, null, null, 'valuation_update', false, error.message);
-      
-      return null;
-    }
-  }
 
   /**
    * Batch score multiple domains
@@ -176,6 +122,100 @@ export class DomainScoringService {
   }
 
   /**
+   * Generate basic score for domain name when metadata is not available
+   */
+  private generateBasicScore(domainName: string): ScoreBreakdown {
+    const domain = domainName.toLowerCase();
+    const parts = domain.split('.');
+    const sld = parts[0]; // Second-level domain
+    const tld = parts[parts.length - 1]; // Top-level domain
+
+    // Basic scoring algorithm
+    let totalScore = 50; // Base score
+
+    // Length scoring (shorter is better, up to +15)
+    const lengthScore = Math.max(0, Math.min(15, 15 - Math.floor(sld.length / 2)));
+    totalScore += lengthScore;
+
+    // Extension scoring
+    let extensionScore = 5; // Default
+    if (tld === 'com') extensionScore = 15;
+    else if (['org', 'net', 'gov', 'edu'].includes(tld)) extensionScore = 12;
+    else if (['io', 'ai', 'co'].includes(tld)) extensionScore = 10;
+    totalScore += extensionScore;
+
+    // Keyword/brandability scoring (simple heuristics)
+    let keywordScore = 5; // Default
+    if (sld.length <= 4) keywordScore = 15; // Short domains are premium
+    else if (sld.length <= 6) keywordScore = 12;
+    else if (sld.length <= 8) keywordScore = 8;
+    totalScore += keywordScore;
+
+    // Age score (assume moderate for unknown domains)
+    const ageScore = 10;
+    totalScore += ageScore;
+
+    // Traffic score (default low for unknown domains)
+    const trafficScore = 5;
+    totalScore += trafficScore;
+
+    totalScore = Math.min(100, Math.max(0, totalScore));
+
+    return {
+      totalScore,
+      ageScore,
+      lengthScore,
+      extensionScore,
+      keywordScore,
+      trafficScore,
+      marketScore: Math.floor(totalScore * 0.3), // Estimated market score
+      domaScore: totalScore, // Same as total score
+      confidenceLevel: 60, // Lower confidence for basic scoring
+      dataSource: 'hybrid-fallback'
+    };
+  }
+
+  /**
+   * Score domain by domain name (e.g., nike.com)
+   */
+  async scoreDomainByName(domainName: string): Promise<ScoreBreakdown | null> {
+    try {
+      this.logger.log(`Scoring domain by name: ${domainName}`);
+
+      // Get metadata directly by domain name
+      const metadata = await this.domainMetadataService.getDomainMetadataByName(domainName);
+
+      let scoreBreakdown: ScoreBreakdown;
+
+      if (!metadata) {
+        this.logger.warn(`No metadata found for domain ${domainName}, generating basic score`);
+        // Generate a basic score for the domain name
+        scoreBreakdown = this.generateBasicScore(domainName);
+      } else {
+        // Calculate comprehensive score with metadata
+        scoreBreakdown = await this.calculateComprehensiveScore(metadata);
+        // Save to database using domain name as key
+        await this.saveScoreToDatabase(domainName, metadata, scoreBreakdown);
+      }
+
+      // Log history (only if we have metadata)
+      if (metadata) {
+        await this.logScoringHistory(domainName, metadata, scoreBreakdown, 'score_by_name', true);
+      }
+
+      return scoreBreakdown;
+
+    } catch (error) {
+      this.logger.error(`Error scoring domain by name ${domainName}:`, error.message);
+
+      // Log failed attempt
+      await this.logScoringHistory(domainName, null, null, 'score_by_name', false, error.message);
+
+      throw new Error(`Unable to score domain: ${domainName}`);
+    }
+  }
+
+  /**
    * Get scoring history for a domain
    */
   async getScoringHistory(tokenId: string, limit: number = 10): Promise<ScoringHistory[]> {
@@ -201,20 +241,12 @@ export class DomainScoringService {
     let marketScore = 0;
     
     try {
-      // Get traffic metrics
-      const trafficMetrics = await this.externalApiService.getTrafficMetrics(domainName);
-      trafficScore = this.calculateTrafficScore(trafficMetrics);
-      
-      // Get keyword analysis
-      const keywordAnalysis = await this.externalApiService.analyzeKeywords(domainName);
-      keywordScore = this.calculateEnhancedKeywordScore(keywordAnalysis);
-      marketScore = this.calculateMarketScore(keywordAnalysis);
-      
+      // Use fallback scores since we removed external APIs
+      trafficScore = 10; // Simple fallback
+      marketScore = 10; // Simple fallback
     } catch (error) {
-      this.logger.warn(`External API error for ${domainName}, using fallback scores:`, error.message);
-      // Use fallback scores from basic analysis
-      trafficScore = this.calculateFallbackTrafficScore(domainName);
-      marketScore = this.calculateFallbackMarketScore(domainName);
+      trafficScore = 10;
+      marketScore = 10;
     }
 
     const totalScore = Math.min(100, 
@@ -244,65 +276,6 @@ export class DomainScoringService {
     };
   }
 
-  private async calculateDomainValuation(
-    metadata: DomainMetadata, 
-    scoreBreakdown: ScoreBreakdown
-  ): Promise<DomainValuationResult> {
-    // Base valuation calculation
-    const baseValue = 1000; // $1,000 base value
-    const scoreMultiplier = Math.pow(scoreBreakdown.totalScore / 10, 2); // Exponential scaling
-    
-    let estimatedValue = baseValue * scoreMultiplier;
-
-    const factors = [`Base score: ${scoreBreakdown.totalScore}/100`];
-
-    // Apply premium factors
-    const sld = metadata.name.split('.')[0];
-    const tld = metadata.name.split('.').pop() || '';
-
-    // Length premium
-    if (sld.length <= 3) {
-      estimatedValue *= 5;
-      factors.push('3-letter premium: 5x');
-    } else if (sld.length <= 4) {
-      estimatedValue *= 3;
-      factors.push('4-letter premium: 3x');
-    }
-
-    // TLD premium
-    if (tld === 'com') {
-      estimatedValue *= 2;
-      factors.push('.com premium: 2x');
-    } else if (tld === 'ai') {
-      estimatedValue *= 1.5;
-      factors.push('.ai premium: 1.5x');
-    }
-
-    // Historical trading premium
-    if (metadata.transactions.length >= 2) {
-      const avgPrice = this.domainMetadataService.calculateAverageTradingPrice(metadata.transactions);
-      if (avgPrice > estimatedValue) {
-        estimatedValue = Math.max(estimatedValue, avgPrice);
-        factors.push(`Historical average: $${avgPrice.toLocaleString()}`);
-      }
-    }
-
-    // Cap values for safety
-    estimatedValue = Math.min(estimatedValue, 1000000); // $1M max
-    estimatedValue = Math.max(estimatedValue, 100); // $100 min
-
-    // Convert to USDC format (6 decimals)
-    const estimatedValueUsdc = Math.round(estimatedValue * 1e6);
-    const maxLoanAmount = Math.round(estimatedValueUsdc * 0.5); // 50% LTV
-
-    return {
-      estimatedValue: estimatedValueUsdc.toString(),
-      maxLoanAmount: maxLoanAmount.toString(),
-      confidenceLevel: scoreBreakdown.confidenceLevel,
-      factors,
-      valuationMethod: 'ai-comprehensive',
-    };
-  }
 
   // Additional helper methods for scoring calculations...
   private calculateTrafficScore(trafficMetrics: any): number {
@@ -394,9 +367,6 @@ export class DomainScoringService {
     return this.domainScoreRepository.findOne({ where: { tokenId } });
   }
 
-  private async getCachedValuation(tokenId: string): Promise<DomainValuation | null> {
-    return this.domainValuationRepository.findOne({ where: { tokenId } });
-  }
 
   private isCacheValid(score: DomainScore): boolean {
     const cacheTimeout = this.configService.get<number>('scoring.cacheTimeout') || 3600;
@@ -405,12 +375,6 @@ export class DomainScoringService {
     return ageInSeconds < cacheTimeout && score.isValid;
   }
 
-  private isValuationCacheValid(valuation: DomainValuation): boolean {
-    const cacheTimeout = this.configService.get<number>('scoring.cacheTimeout') || 3600;
-    const now = new Date();
-    const ageInSeconds = (now.getTime() - valuation.lastUpdated.getTime()) / 1000;
-    return ageInSeconds < cacheTimeout && valuation.isActive;
-  }
 
   private async saveScoreToDatabase(tokenId: string, metadata: DomainMetadata, score: ScoreBreakdown): Promise<void> {
     const domainScore = this.domainScoreRepository.create({
@@ -437,25 +401,6 @@ export class DomainScoringService {
     await this.domainScoreRepository.save(domainScore);
   }
 
-  private async saveValuationToDatabase(tokenId: string, metadata: DomainMetadata, valuation: DomainValuationResult): Promise<void> {
-    const domainValuation = this.domainValuationRepository.create({
-      tokenId,
-      domainName: metadata.name,
-      estimatedValue: valuation.estimatedValue,
-      maxLoanAmount: valuation.maxLoanAmount,
-      confidenceLevel: valuation.confidenceLevel,
-      factors: valuation.factors,
-      valuationMethod: valuation.valuationMethod,
-      priceHistory: metadata.transactions.map(tx => ({
-        price: tx.price,
-        timestamp: tx.timestamp,
-        type: tx.type
-      })),
-      isActive: true,
-    });
-
-    await this.domainValuationRepository.save(domainValuation);
-  }
 
   private async logScoringHistory(
     tokenId: string,
@@ -496,15 +441,6 @@ export class DomainScoringService {
     };
   }
 
-  private formatValuationResult(valuation: DomainValuation): DomainValuationResult {
-    return {
-      estimatedValue: valuation.estimatedValue,
-      maxLoanAmount: valuation.maxLoanAmount,
-      confidenceLevel: valuation.confidenceLevel,
-      factors: valuation.factors,
-      valuationMethod: valuation.valuationMethod,
-    };
-  }
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));

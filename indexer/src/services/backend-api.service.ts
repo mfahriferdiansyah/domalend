@@ -71,7 +71,7 @@ export class BackendApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
       
-      const response = await fetch(`${this.baseUrl}/api/v2/indexer/domains/${domainName}/score`, {
+      const response = await fetch(`${this.baseUrl}/domains/${domainName}/score`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -124,7 +124,17 @@ export class BackendApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout * 2); // Double timeout for batch
       
-      const response = await fetch(`${this.baseUrl}/api/v2/indexer/bulk-test`, {
+      // Bulk endpoint no longer exists - process domains individually
+      console.log('[BackendAPI] Bulk endpoint removed, processing individually');
+      const results = [];
+      for (const domain of domains) {
+        const score = await this.scoreDomain(domain);
+        results.push({ domain, score });
+      }
+      return results;
+
+      /*
+      const response = await fetch(`${this.baseUrl}/bulk-test`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,6 +165,7 @@ export class BackendApiService {
           timestamp: new Date().toISOString(),
         }
       }));
+      */
       
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -173,7 +184,12 @@ export class BackendApiService {
    */
   async getScoringStatus(domainName: string): Promise<{hasScore: boolean, lastScored?: string, score?: number}> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v2/indexer/domains/${domainName}/status`);
+      // Status endpoint no longer exists
+      console.warn('[BackendAPI] Status endpoint removed, assuming no cached score');
+      return { hasScore: false };
+
+      /*
+      const response = await fetch(`${this.baseUrl}/domains/${domainName}/status`);
       
       if (response.ok) {
         return await response.json() as {hasScore: boolean, lastScored?: string, score?: number};
@@ -181,6 +197,7 @@ export class BackendApiService {
       
       // If endpoint doesn't exist, assume no status tracking
       return { hasScore: false };
+      */
       
     } catch (error) {
       console.warn(`[BackendAPI] Status check failed for ${domainName}:`, error);
@@ -237,7 +254,7 @@ export class BackendApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      const response = await fetch(`${this.baseUrl}/api/v2/api/contracts/submit-score`, {
+      const response = await fetch(`${this.baseUrl}/contracts/submit-score`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -284,7 +301,7 @@ export class BackendApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      const response = await fetch(`${this.baseUrl}/api/v2/contracts/liquidate-loan`, {
+      const response = await fetch(`${this.baseUrl}/contracts/liquidate-loan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -324,7 +341,7 @@ export class BackendApiService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v2/indexer/health`, {
+      const response = await fetch(`${this.baseUrl}/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000), // 5 second timeout
       });

@@ -68,6 +68,17 @@ export default () => ({
     rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
   },
 
+  // Liquidation Configuration
+  liquidation: {
+    checkIntervalMs: parseInt(process.env.LIQUIDATION_CHECK_INTERVAL_MS, 10) || 30000, // 30 seconds
+    enabled: process.env.LIQUIDATION_ENABLED !== 'false', // Enabled by default
+  },
+
+  // Ponder Integration Configuration
+  ponder: {
+    graphqlUrl: process.env.PONDER_GRAPHQL_URL || 'http://localhost:42069',
+  },
+
   // Logging Configuration
   logging: {
     level: process.env.LOG_LEVEL || 'info',

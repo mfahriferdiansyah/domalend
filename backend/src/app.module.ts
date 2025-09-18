@@ -6,8 +6,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 // Feature Modules
 import { DomainModule } from './modules/domain/domain.module';
 import { AiModule } from './modules/ai/ai.module';
-import { BlockchainModule } from './modules/blockchain/blockchain.module';
-import { ExternalApiModule } from './modules/external-api/external-api.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
 import { HealthModule } from './modules/health/health.module';
 
 // Core Modules
@@ -47,8 +46,7 @@ import configuration from './config/configuration';
     // Feature Modules
     DomainModule,
     AiModule,
-    BlockchainModule,
-    ExternalApiModule,
+    ContractsModule,
     HealthModule,
   ],
 })

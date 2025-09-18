@@ -26,8 +26,7 @@ console.log(`🚨 [DEBUG] LOAN_MANAGER_ADDRESS: ${process.env.LOAN_MANAGER_ADDRE
 console.log(`🚨 [DEBUG] DEPLOYMENT_BLOCK: ${process.env.DEPLOYMENT_BLOCK}`);
 console.log(`🚨 [DEBUG] Registering event handlers and liquidation monitoring...`);
 
-// Track if liquidation monitoring has been started
-let liquidationMonitoringStarted = false;
+// Liquidation monitoring moved to backend service
 
 /**
  * MAIN EVENT: ScoringRequested from AIOracle
@@ -45,8 +44,7 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
   
   console.log(`🔍 [AIOracle] Processing scoring request for tokenId: ${domainTokenId}`);
   
-  // Check for defaulted loans inline during scoring events
-  await checkForDefaultedLoansInline(context);
+  // Liquidation monitoring now handled by backend service
   
   try {
     // 1. Insert initial scoring event record
@@ -155,8 +153,8 @@ ponder.on("AIOracle:ScoreSubmitted", async ({ event, context }) => {
   // Update all scoring events for this domain to confirmed
   try {
     // Use simple database query pattern for Ponder v0.12 with proper null safety
-    // Query scoring events for this domain (use any type for now to avoid compilation issues)
-    const allScoringEvents = (await (context.db as any).findMany?.(scoringEvent)) || [];
+    // Query scoring events for this domain using new Ponder SQL API
+    const allScoringEvents = await context.db.sql.select().from(scoringEvent);
     const scoringEvents = allScoringEvents.filter?.((e: any) => e.domainTokenId === domainTokenId.toString()) || [];
 
     for (const event of scoringEvents) {
@@ -267,8 +265,8 @@ ponder.on("AIOracle:BatchScoresSubmitted", async ({ event, context }) => {
         continue;
       }
 
-      // Find existing scoring events for this domain
-      const allScoringEvents = await (context.db as any).findMany(scoringEvent);
+      // Find existing scoring events for this domain using new Ponder SQL API
+      const allScoringEvents = await context.db.sql.select().from(scoringEvent);
       const domainEvents = allScoringEvents?.filter((e: any) => e.domainTokenId === domainTokenId.toString()) || [];
 
       // Update the most recent pending event
@@ -618,8 +616,8 @@ ponder.on("LoanManager:LoanRepaid", async ({ event, context }) => {
   try {
     // Find the original loan to get domain information
     // Use SQL query to find the original loan with specific conditions
-    // Find the original loan (use any type for compatibility)
-    const allLoans = (await (context.db as any).findMany?.(loanEvent)) || [];
+    // Find the original loan using new Ponder SQL API
+    const allLoans = await context.db.sql.select().from(loanEvent);
     const originalLoan = allLoans.find?.((loan: any) =>
       loan.loanId === loanId.toString() && loan.eventType === 'created_instant'
     ) || null;
@@ -658,8 +656,8 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
 
   try {
     // Find the original loan to get additional data
-    // Find the original loan (use any type for compatibility)
-    const allLoans = (await (context.db as any).findMany?.(loanEvent)) || [];
+    // Find the original loan using new Ponder SQL API
+    const allLoans = await context.db.sql.select().from(loanEvent);
     const originalLoan = allLoans.find?.((loan: any) =>
       loan.loanId === loanId.toString() && loan.eventType === 'created_instant'
     ) || null;
@@ -699,8 +697,8 @@ ponder.on("DutchAuction:BidPlaced", async ({ event, context }) => {
 
   try {
     // Find the auction start event to get domain information
-    // Find the auction start event (use any type for compatibility)
-    const allAuctions = (await (context.db as any).findMany?.(auctionEvent)) || [];
+    // Find the auction start event using new Ponder SQL API
+    const allAuctions = await context.db.sql.select().from(auctionEvent);
     const auctionStart = allAuctions.find?.((auction: any) =>
       auction.auctionId === auctionId.toString() && auction.eventType === 'started'
     ) || null;
@@ -734,8 +732,8 @@ ponder.on("DutchAuction:AuctionEnded", async ({ event, context }) => {
 
   try {
     // Find the auction start event to get loan and domain information
-    // Find the auction start event (use any type for compatibility)
-    const allAuctions = (await (context.db as any).findMany?.(auctionEvent)) || [];
+    // Find the auction start event using new Ponder SQL API
+    const allAuctions = await context.db.sql.select().from(auctionEvent);
     const auctionStart = allAuctions.find?.((auction: any) =>
       auction.auctionId === auctionId.toString() && auction.eventType === 'started'
     ) || null;
@@ -778,8 +776,8 @@ ponder.on("DutchAuction:AuctionCancelled", async ({ event, context }) => {
 
   try {
     // Find the auction start event to get domain and loan information
-    // Find the auction start event (use any type for compatibility)
-    const allAuctions = (await (context.db as any).findMany?.(auctionEvent)) || [];
+    // Find the auction start event using new Ponder SQL API
+    const allAuctions = await context.db.sql.select().from(auctionEvent);
     const auctionStart = allAuctions.find?.((auction: any) =>
       auction.auctionId === auctionId.toString() && auction.eventType === 'started'
     ) || null;
@@ -806,131 +804,9 @@ ponder.on("DutchAuction:AuctionCancelled", async ({ event, context }) => {
 });
 
 /**
- * LIQUIDATION MONITORING SYSTEM
- * Checks for defaulted loans and triggers liquidation
+ * LIQUIDATION MONITORING MOVED TO BACKEND SERVICE
+ * The backend now handles liquidation monitoring via scheduled jobs and GraphQL queries
  */
-async function checkAndLiquidateDefaultedLoans(context: any) {
-  const now = new Date();
-  console.log(`🔍 [Liquidation] Checking for defaulted loans at ${now.toISOString()}`);
-
-  try {
-    // Query all instant loans that need liquidation check using new Ponder SQL API
-    const allLoans = await context.db.sql.select().from(loanEvent);
-    console.log(`🔍 [Liquidation Debug] Found ${allLoans.length} total loans in database`);
-
-    // Debug: log all loans with their details
-    allLoans.forEach((loan: any, index: number) => {
-      console.log(`  Loan ${index + 1}: ID=${loan.loanId}, eventType=${loan.eventType}, liquidationAttempted=${loan.liquidationAttempted}, repaymentDeadline=${loan.repaymentDeadline}`);
-    });
-
-    const defaultedLoans = allLoans.filter?.((loan: any) =>
-      (loan.eventType === 'created_instant' || loan.eventType === 'created_crowdfunded') &&
-      loan.liquidationAttempted === false
-    ) || [];
-
-    console.log(`🔍 [Liquidation Debug] Found ${defaultedLoans.length} loans eligible for liquidation check`);
-
-    if (!defaultedLoans || defaultedLoans.length === 0) {
-      console.log('✅ [Liquidation] No loans found for liquidation check');
-      return;
-    }
-
-    let liquidationCount = 0;
-
-    for (const loan of defaultedLoans) {
-      try {
-        // Check if loan is past due (repayment deadline + buffer hours)
-        const repaymentDeadline = new Date(loan.repaymentDeadline);
-        const bufferHours = loan.liquidationBufferHours || 0;
-        const liquidationThreshold = new Date(repaymentDeadline.getTime() + bufferHours * 60 * 60 * 1000);
-
-        if (now < liquidationThreshold) {
-          continue; // Loan not yet eligible for liquidation
-        }
-
-        console.log(`🚨 [Liquidation] Requesting backend to liquidate loan ${loan.loanId} (deadline: ${repaymentDeadline.toISOString()}, threshold: ${liquidationThreshold.toISOString()})`);
-
-        // Mark as liquidation attempted first (to prevent duplicate attempts)
-        await context.db.update(loanEvent, { id: loan.id })
-          .set({
-            liquidationAttempted: true,
-            liquidationTimestamp: new Date(),
-          });
-
-        // Request backend to liquidate the loan
-        try {
-          const liquidationResponse = await backendApi.liquidateLoan({
-            loanId: loan.loanId,
-            domainTokenId: loan.domainTokenId,
-            borrowerAddress: loan.borrowerAddress,
-            domainName: loan.domainName || undefined
-          });
-
-          const txHash = liquidationResponse.txHash || '';
-          console.log(`✅ [Liquidation] Backend submitted liquidation for loan ${loan.loanId}! TX: ${txHash}`);
-
-          // Update database with transaction hash
-          await context.db.update(loanEvent, { id: loan.id })
-            .set({
-              liquidationTxHash: txHash,
-            });
-
-          liquidationCount++;
-
-        } catch (backendError) {
-          console.error(`❌ [Liquidation] Backend failed to liquidate loan ${loan.loanId}:`, backendError);
-          throw backendError;
-        }
-
-      } catch (loanError) {
-        console.error(`❌ [Liquidation] Failed to liquidate loan ${loan.loanId}:`, loanError);
-
-        // Revert liquidation attempt flag on error
-        try {
-          await context.db.update(loanEvent, { id: loan.id })
-            .set({
-              liquidationAttempted: false,
-              liquidationTimestamp: null,
-            });
-        } catch (revertError) {
-          console.error(`❌ [Liquidation] Failed to revert liquidation attempt for loan ${loan.loanId}:`, revertError);
-        }
-      }
-    }
-
-    if (liquidationCount > 0) {
-      console.log(`🎉 [Liquidation] Successfully submitted ${liquidationCount} liquidation(s) via backend`);
-    } else {
-      console.log('✅ [Liquidation] No loans eligible for liquidation');
-    }
-
-  } catch (error) {
-    console.error('❌ [Liquidation] Error during liquidation check:', error);
-  }
-}
-
-/**
- * START LIQUIDATION MONITORING
- * Runs periodic checks for defaulted loans
- */
-let liquidationInterval: NodeJS.Timeout | null = null;
-
-function startLiquidationMonitoring(context: any) {
-  if (liquidationInterval) {
-    clearInterval(liquidationInterval);
-  }
-
-  const checkIntervalMs = parseInt(process.env.LIQUIDATION_CHECK_INTERVAL_MS || '10000'); // Default 10 seconds
-  console.log(`🚀 [Liquidation] Starting liquidation monitoring (interval: ${checkIntervalMs}ms)`);
-
-  // Run initial check after 30 seconds
-  setTimeout(() => void checkAndLiquidateDefaultedLoans(context), 30000);
-
-  // Set up periodic checks
-  liquidationInterval = setInterval(() => {
-    void checkAndLiquidateDefaultedLoans(context);
-  }, checkIntervalMs);
-}
 
 /**
  * LOAN MANAGEMENT: Handle LoanManager contract events
@@ -976,8 +852,8 @@ ponder.on("LoanManager:CollateralLocked", async ({ event, context }) => {
   console.log(`🔒 [LoanManager] Collateral locked: loan ${loanId}, domain ${domainTokenId}`);
 
   try {
-    // Find the loan to update
-    const allLoans = (await (context.db as any).findMany?.(loanEvent)) || [];
+    // Find the loan to update using new Ponder SQL API
+    const allLoans = await context.db.sql.select().from(loanEvent);
     const loan = allLoans.find?.((l: any) =>
       l.loanId === loanId.toString() && (l.eventType === 'created_instant' || l.eventType === 'created_crowdfunded')
     );
@@ -1011,8 +887,8 @@ ponder.on("LoanManager:CollateralReleased", async ({ event, context }) => {
   console.log(`🔓 [LoanManager] Collateral released: loan ${loanId}, domain ${domainTokenId}`);
 
   try {
-    // Find the original loan
-    const allLoans = (await (context.db as any).findMany?.(loanEvent)) || [];
+    // Find the original loan using new Ponder SQL API
+    const allLoans = await context.db.sql.select().from(loanEvent);
     const originalLoan = allLoans.find?.((l: any) =>
       l.loanId === loanId.toString() && (l.eventType === 'created_instant' || l.eventType === 'created_crowdfunded')
     );
@@ -1046,8 +922,8 @@ ponder.on("LoanManager:CollateralLiquidated", async ({ event, context }) => {
   console.log(`⚖️ [LoanManager] Collateral liquidated: loan ${loanId} → auction ${auctionId}`);
 
   try {
-    // Find the original loan
-    const allLoans = (await (context.db as any).findMany?.(loanEvent)) || [];
+    // Find the original loan using new Ponder SQL API
+    const allLoans = await context.db.sql.select().from(loanEvent);
     const originalLoan = allLoans.find?.((l: any) =>
       l.loanId === loanId.toString() && (l.eventType === 'created_instant' || l.eventType === 'created_crowdfunded')
     );
@@ -1131,8 +1007,8 @@ ponder.on("SatoruLending:LoanRequestFunded", async ({ event, context }) => {
       transactionHash: event.transaction.hash,
     });
 
-    // Update loan request status
-    const allRequests = (await (context.db as any).findMany?.(loanRequest)) || [];
+    // Update loan request status using new Ponder SQL API
+    const allRequests = await context.db.sql.select().from(loanRequest);
     const request = allRequests.find?.((r: any) => r.requestId === requestId.toString());
 
     if (request) {
@@ -1156,8 +1032,8 @@ ponder.on("SatoruLending:LoanExecuted", async ({ event, context }) => {
   console.log(`🎯 [SatoruLending] Crowdfunded loan executed: ${loanId} from request ${requestId}`);
 
   try {
-    // Find the original request
-    const allRequests = (await (context.db as any).findMany?.(loanRequest)) || [];
+    // Find the original request using new Ponder SQL API
+    const allRequests = await context.db.sql.select().from(loanRequest);
     const request = allRequests.find?.((r: any) => r.requestId === requestId.toString());
 
     if (request) {
@@ -1179,8 +1055,8 @@ ponder.on("SatoruLending:LoanRequestCancelled", async ({ event, context }) => {
   console.log(`❌ [SatoruLending] Loan request cancelled: ${requestId} (${reason})`);
 
   try {
-    // Find and update the request
-    const allRequests = (await (context.db as any).findMany?.(loanRequest)) || [];
+    // Find and update the request using new Ponder SQL API
+    const allRequests = await context.db.sql.select().from(loanRequest);
     const request = allRequests.find?.((r: any) => r.requestId === requestId.toString());
 
     if (request) {
@@ -1224,7 +1100,5 @@ ponder.on("SatoruLending:PoolUpdated", async ({ event, context }) => {
 // Export handlers for testing
 export {
   updateDomainAnalytics,
-  updateDomainAnalyticsForLiquidation,
-  checkAndLiquidateDefaultedLoans,
-  startLiquidationMonitoring
+  updateDomainAnalyticsForLiquidation
 };

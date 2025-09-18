@@ -83,6 +83,55 @@ export class DomainMetadataService {
   }
 
   /**
+   * Fetch domain metadata by domain name (e.g., nike.com)
+   */
+  async getDomainMetadataByName(domainName: string): Promise<DomainMetadata | null> {
+    try {
+      const query = `
+        query GetDomainByName($name: String!) {
+          domains(where: { name: $name }, first: 1) {
+            tokenId
+            name
+            registrar
+            registrationDate
+            expirationDate
+            owner
+            tokenizationDate
+            transactions(orderBy: timestamp, orderDirection: desc, first: 20) {
+              timestamp
+              price
+              type
+              transactionHash
+              from
+              to
+            }
+          }
+        }
+      `;
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          this.domaSubgraphUrl,
+          { query, variables: { name: domainName } },
+          { timeout: 10000 }
+        )
+      );
+
+      const domainsData = response.data?.data?.domains;
+      if (!domainsData || domainsData.length === 0) {
+        this.logger.warn(`No domain data found for name: ${domainName}`);
+        return null;
+      }
+
+      return this.formatDomainMetadata(domainsData[0]);
+
+    } catch (error) {
+      this.logger.error(`Error fetching domain metadata for ${domainName}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
    * Get domain metadata from cache or fetch fresh
    */
   async getDomainMetadataWithCache(tokenId: string, maxAge: number = 3600): Promise<DomainMetadata | null> {
