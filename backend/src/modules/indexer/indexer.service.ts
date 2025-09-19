@@ -1,9 +1,15 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class IndexerService {
   private readonly logger = new Logger(IndexerService.name);
-  private readonly graphqlEndpoint = 'http://localhost:42069/graphql';
+  private readonly graphqlEndpoint: string;
+
+  constructor(private configService: ConfigService) {
+    this.graphqlEndpoint = this.configService.get<string>('ponder.graphqlUrl') || 'http://localhost:42069/graphql';
+    this.logger.log(`Indexer GraphQL endpoint: ${this.graphqlEndpoint}`);
+  }
 
   async queryLoans(filters: any): Promise<any> {
     const { where, limit = 20 } = filters;
