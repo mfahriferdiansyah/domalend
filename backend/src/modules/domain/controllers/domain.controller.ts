@@ -92,7 +92,7 @@ export class DomainController {
   @ApiParam({
     name: 'address',
     description: 'Ethereum wallet address (42-character hex string starting with 0x)',
-    example: '0x47B245f2A3c7557d855E4d800890C4a524a42Cc8'
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53'
   })
   @ApiResponse({
     status: 200,

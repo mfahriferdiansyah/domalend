@@ -31,7 +31,7 @@ export class DomaNFTDto {
 
   @ApiProperty({
     description: 'Owner address',
-    example: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1',
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53',
   })
   owner: string;
 
@@ -97,7 +97,7 @@ export class DomaNFTDto {
 export class AddressNFTBalanceDto {
   @ApiProperty({
     description: 'Address queried',
-    example: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1',
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53',
   })
   address: string;
 
