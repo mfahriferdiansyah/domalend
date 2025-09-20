@@ -78,10 +78,10 @@ export class DomainScoreCacheService {
             cacheAge,
           };
         } else {
-          // No cached score available, return fallback
+          // No cached score available, return zero fallback
           return {
-            totalScore: 50,
-            confidence: 25,
+            totalScore: 0,
+            confidence: 0,
             reasoning: 'Rate limited - no recent score available',
             isFromCache: false,
             cacheAge: 0,
@@ -114,11 +114,11 @@ export class DomainScoreCacheService {
     } catch (error) {
       this.logger.error(`[Score Error] ${domainName}:`, error.message);
       
-      // Return fallback score
+      // Return zero fallback score
       return {
-        totalScore: 50,
-        confidence: 20,
-        reasoning: `Fallback score due to error: ${error.message}`,
+        totalScore: 0,
+        confidence: 0,
+        reasoning: `OpenAI scoring failed: ${error.message}`,
         isFromCache: false,
         cacheAge: 0,
       };
@@ -171,11 +171,11 @@ export class DomainScoreCacheService {
     } catch (error) {
       this.logger.error('[Batch Score Error]:', error.message);
       
-      // Return fallback scores for all
+      // Return zero fallback scores for all
       for (const domainName of domainNames) {
         results[domainName] = {
-          totalScore: 50,
-          confidence: 20,
+          totalScore: 0,
+          confidence: 0,
           reasoning: 'Batch scoring error',
           isFromCache: false,
           cacheAge: 0,

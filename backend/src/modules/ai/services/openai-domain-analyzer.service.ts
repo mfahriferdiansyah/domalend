@@ -311,7 +311,7 @@ Analyze this domain's business intelligence, brand value, and commercial potenti
 
   private validateScore(score: any): number {
     const num = Number(score);
-    return isNaN(num) ? 50 : Math.min(100, Math.max(0, num));
+    return isNaN(num) ? 0 : Math.min(100, Math.max(0, num));
   }
 
   private validateRiskLevel(risk: any): 'low' | 'medium' | 'high' {
