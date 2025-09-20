@@ -11,6 +11,7 @@ import { HealthModule } from './modules/health/health.module';
 import { LiquidationModule } from './modules/liquidation/liquidation.module';
 import { PoolsModule } from './modules/pools/pools.module';
 import { AuctionsModule } from './modules/auctions/auctions.module';
+import { LoansModule } from './modules/loans/loans.module';
 
 // Core Modules
 import { DatabaseModule } from './core/database/database.module';
@@ -54,6 +55,7 @@ import configuration from './config/configuration';
     LiquidationModule,
     PoolsModule,
     AuctionsModule,
+    LoansModule,
   ],
 })
 export class AppModule {}

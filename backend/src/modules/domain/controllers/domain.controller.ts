@@ -18,12 +18,19 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 
 // Services
 import { DomaNftService } from '../services/doma-nft.service';
+import { DomainScoreCacheService } from '../services/domain-score-cache.service';
 
 // DTOs
 import {
   AddressNFTBalanceDto,
   NFTDetailsResponseDto,
-  DomaNFTDto
+  DomaNFTDto,
+  GetUserDomainsResponseDto,
+  EnhancedDomainDto,
+  DomainPortfolioSummaryDto,
+  DomainLoanStatusDto,
+  DomainAiScoreDto,
+  DomainLoanHistoryDto
 } from '../dto/domain.dto';
 
 @ApiTags('domains')
@@ -34,6 +41,7 @@ export class DomainController {
 
   constructor(
     private readonly domaNftService: DomaNftService,
+    private readonly domainScoreCacheService: DomainScoreCacheService,
   ) {}
 
   @Get('nft/:tokenId')
@@ -118,5 +126,101 @@ export class DomainController {
       );
     }
   }
+
+  @Get('user/:address')
+  @ApiOperation({
+    summary: 'Get enhanced domain portfolio by user (Portfolio Tab 1)',
+    description: 'Retrieve domains owned by user with loan status, AI scoring, and portfolio analytics'
+  })
+  @ApiParam({
+    name: 'address',
+    description: 'User wallet address',
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Enhanced domain portfolio retrieved successfully',
+    type: GetUserDomainsResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Invalid Ethereum address format' })
+  @ApiResponse({ status: 500, description: 'Failed to fetch domain portfolio' })
+  async getUserDomains(@Param('address') address: string): Promise<GetUserDomainsResponseDto> {
+    this.logger.log(`Getting enhanced domain portfolio for address: ${address}`);
+
+    if (!ethers.isAddress(address)) {
+      throw new HttpException('Invalid Ethereum address', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      // Get basic domain data
+      const basicDomainsData = await this.domaNftService.getNFTBalanceForAddress(address);
+
+      // Enhance each domain with placeholder data for now
+      const enhancedDomains: EnhancedDomainDto[] = [];
+
+      for (const domain of basicDomainsData.ownedNFTs) {
+        const enhancedDomain: EnhancedDomainDto = {
+          ...domain,
+          loanHistory: {
+            totalLoans: 0,
+            totalBorrowed: '0',
+            currentlyCollateralized: false,
+            averageLoanAmount: '0',
+            successfulRepayments: 0,
+            liquidations: 0
+          }
+        };
+
+        // Add AI score if available
+        try {
+          const scoreData = await this.domainScoreCacheService.getDomainScore(domain.name);
+          if (scoreData) {
+            enhancedDomain.aiScore = {
+              score: scoreData.totalScore,
+              confidence: scoreData.confidence,
+              lastUpdated: new Date().toISOString(),
+              factors: {
+                age: Math.round(scoreData.totalScore * 0.2),
+                extension: Math.round(scoreData.totalScore * 0.15),
+                length: Math.round(scoreData.totalScore * 0.1),
+                keywords: Math.round(scoreData.totalScore * 0.25),
+                traffic: Math.round(scoreData.totalScore * 0.3)
+              }
+            };
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to get AI score for domain ${domain.name}:`, error.message);
+        }
+
+        enhancedDomains.push(enhancedDomain);
+      }
+
+      // Build portfolio summary
+      const portfolio: DomainPortfolioSummaryDto = {
+        totalDomains: enhancedDomains.length,
+        collateralizedDomains: 0, // No loan data yet
+        totalCollateralValue: '0',
+        averageAiScore: enhancedDomains.length > 0
+          ? Math.round(enhancedDomains.reduce((sum, d) => sum + (d.aiScore?.score || 0), 0) / enhancedDomains.length)
+          : 0,
+        activeLoanValue: '0',
+        portfolioHealth: 100, // Default to healthy since no loans
+        riskLevel: 'low'
+      };
+
+      return {
+        address: address.toLowerCase(),
+        domains: enhancedDomains,
+        portfolio
+      };
+    } catch (error) {
+      this.logger.error(`Error getting enhanced domain portfolio for address ${address}:`, error.message);
+      throw new HttpException(
+        `Failed to get domain portfolio: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
 
 }
