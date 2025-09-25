@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Param,
+  Query,
   HttpException,
   HttpStatus,
   UseGuards,
@@ -12,13 +13,15 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam
+  ApiParam,
+  ApiQuery
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 // Services
 import { DomaNftService } from '../services/doma-nft.service';
 import { DomainScoreCacheService } from '../services/domain-score-cache.service';
+import { IndexerService } from '../../indexer/indexer.service';
 
 // DTOs
 import {
@@ -32,6 +35,15 @@ import {
   DomainAiScoreDto,
   DomainLoanHistoryDto
 } from '../dto/domain.dto';
+import {
+  DomainDto,
+  GetDomainsQueryDto,
+  GetDomainsResponseDto,
+  DomainDetailDto,
+  GetDomainDetailResponseDto,
+  ScoringEventDto,
+  LoanDto
+} from '../../pools/dto/pool.dto';
 
 @ApiTags('domains')
 @Controller('domains')
@@ -42,7 +54,196 @@ export class DomainController {
   constructor(
     private readonly domaNftService: DomaNftService,
     private readonly domainScoreCacheService: DomainScoreCacheService,
+    private readonly indexerService: IndexerService,
   ) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Get all scored domains',
+    description: 'Retrieve all domains with AI scores and analytics, with optional filtering and pagination'
+  })
+  @ApiQuery({
+    name: 'page',
+    description: 'Page number',
+    required: false,
+    type: Number,
+    example: 1
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Number of items per page',
+    required: false,
+    type: Number,
+    example: 20
+  })
+  @ApiQuery({
+    name: 'minAiScore',
+    description: 'Minimum AI score filter',
+    required: false,
+    type: Number,
+    example: 50
+  })
+  @ApiQuery({
+    name: 'maxAiScore',
+    description: 'Maximum AI score filter',
+    required: false,
+    type: Number,
+    example: 100
+  })
+  @ApiQuery({
+    name: 'liquidatedOnly',
+    description: 'Show only liquidated domains',
+    required: false,
+    type: Boolean,
+    example: false
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    description: 'Sort field',
+    required: false,
+    enum: ['latestAiScore', 'totalLoansCreated', 'totalLoanVolume', 'firstScoreTimestamp'],
+    example: 'latestAiScore'
+  })
+  @ApiQuery({
+    name: 'order',
+    description: 'Sort order',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Scored domains retrieved successfully',
+    type: GetDomainsResponseDto
+  })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getScoredDomains(@Query() query: GetDomainsQueryDto): Promise<GetDomainsResponseDto> {
+    const { 
+      page = 1, 
+      limit = 20, 
+      minAiScore, 
+      maxAiScore, 
+      liquidatedOnly, 
+      sortBy = 'lastActivityTimestamp', 
+      order = 'desc' 
+    } = query;
+
+    this.logger.log(`Getting scored domains: page=${page}, limit=${limit}, minAiScore=${minAiScore}, maxAiScore=${maxAiScore}`);
+
+    try {
+      // Build where clause
+      const where: any = {};
+      
+      if (minAiScore !== undefined) {
+        where.latestAiScore_gte = minAiScore;
+      }
+      
+      if (maxAiScore !== undefined) {
+        where.latestAiScore_lte = maxAiScore;
+      }
+      
+      if (liquidatedOnly === true) {
+        where.hasBeenLiquidated = true;
+      }
+
+      const domainData = await this.indexerService.queryDomains({
+        where,
+        limit: limit,
+        orderBy: sortBy,
+        orderDirection: order
+      });
+
+      const domains = this.buildDomainObjects(domainData.domainAnalytics?.items || []);
+
+      return {
+        domains,
+        total: domains.length,
+        page,
+        limit
+      };
+    } catch (error) {
+      this.logger.error('Failed to get scored domains:', error);
+      throw new HttpException('Failed to fetch scored domains', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get(':domainTokenId')
+  @ApiOperation({
+    summary: 'Get domain details by token ID',
+    description: 'Retrieve comprehensive information about a specific domain including loans, auctions, and scoring history'
+  })
+  @ApiParam({
+    name: 'domainTokenId',
+    description: 'Domain token ID',
+    example: '123456'
+  })
+  @ApiQuery({
+    name: 'includeRelations',
+    description: 'Whether to include loans, auctions, and scoring history',
+    required: false,
+    type: Boolean,
+    example: true
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Domain details retrieved successfully',
+    type: GetDomainDetailResponseDto
+  })
+  @ApiResponse({ status: 404, description: 'Domain not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getDomainDetail(
+    @Param('domainTokenId') domainTokenId: string,
+    @Query('includeRelations') includeRelations?: string
+  ): Promise<GetDomainDetailResponseDto> {
+    this.logger.log(`Getting domain detail for domainTokenId: ${domainTokenId}`);
+
+    const shouldIncludeRelations = includeRelations !== 'false'; // Default to true
+
+    try {
+      const domainData = await this.indexerService.queryDomainDetail(domainTokenId, shouldIncludeRelations);
+
+      const domainItems = domainData.domainAnalytics?.items || [];
+      if (domainItems.length === 0) {
+        throw new HttpException('Domain not found', HttpStatus.NOT_FOUND);
+      }
+
+      const domainItem = domainItems[0];
+      const domainDetail: DomainDetailDto = {
+        domainTokenId: domainItem.domainTokenId,
+        domainName: domainItem.domainName,
+        latestAiScore: domainItem.latestAiScore,
+        totalScoringRequests: domainItem.totalScoringRequests,
+        totalLoansCreated: domainItem.totalLoansCreated,
+        totalLoanVolume: domainItem.totalLoanVolume,
+        hasBeenLiquidated: domainItem.hasBeenLiquidated,
+        firstScoreTimestamp: domainItem.firstScoreTimestamp,
+        lastActivityTimestamp: domainItem.lastActivityTimestamp,
+      };
+
+      // Include relations if requested and available
+      if (shouldIncludeRelations) {
+        if (domainItem.loans) {
+          domainDetail.loans = this.buildLoanObjects(domainItem.loans);
+        }
+
+        if (domainItem.scoringEvents) {
+          domainDetail.scoringHistory = this.buildScoringEventObjects(domainItem.scoringEvents);
+        }
+
+        if (domainItem.auctions) {
+          domainDetail.auctions = domainItem.auctions;
+        }
+      }
+
+      return { domain: domainDetail };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`Failed to get domain detail for ${domainTokenId}:`, error);
+      throw new HttpException('Failed to fetch domain details', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 
   @Get('nft/:tokenId')
   @ApiOperation({
@@ -222,5 +423,49 @@ export class DomainController {
     }
   }
 
+  private buildDomainObjects(domainEvents: any[]): DomainDto[] {
+    return domainEvents.map(event => ({
+      domainTokenId: event.domainTokenId,
+      domainName: event.domainName,
+      latestAiScore: event.latestAiScore,
+      totalScoringRequests: event.totalScoringRequests,
+      totalLoansCreated: event.totalLoansCreated,
+      totalLoanVolume: event.totalLoanVolume,
+      hasBeenLiquidated: event.hasBeenLiquidated,
+      firstScoreTimestamp: event.firstScoreTimestamp,
+      lastActivityTimestamp: event.lastActivityTimestamp
+    }));
+  }
 
+  private buildLoanObjects(loanEvents: any[]): LoanDto[] {
+    return loanEvents.map(event => ({
+      loanId: event.loanId,
+      borrowerAddress: event.borrowerAddress,
+      domainTokenId: event.domainTokenId,
+      domainName: event.domainName,
+      loanAmount: event.loanAmount,
+      aiScore: event.aiScore,
+      interestRate: event.interestRate,
+      eventType: event.eventType,
+      eventTimestamp: event.eventTimestamp,
+      repaymentDeadline: event.repaymentDeadline,
+      poolId: event.poolId,
+      liquidationAttempted: event.liquidationAttempted,
+      liquidationTimestamp: event.liquidationTimestamp
+    }));
+  }
+
+  private buildScoringEventObjects(scoringEvents: any[]): ScoringEventDto[] {
+    return scoringEvents.map(event => ({
+      id: event.id,
+      domainTokenId: event.domainTokenId,
+      domainName: event.domainName,
+      requesterAddress: event.requesterAddress,
+      aiScore: event.aiScore,
+      confidence: event.confidence,
+      reasoning: event.reasoning,
+      requestTimestamp: event.requestTimestamp,
+      status: event.status
+    }));
+  }
 }

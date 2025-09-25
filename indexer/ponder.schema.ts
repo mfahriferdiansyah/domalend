@@ -1,4 +1,4 @@
-import { onchainTable, index } from "ponder";
+import { onchainTable, index, relations } from "ponder";
 
 // Scoring Events tracking from AIOracle - CRITICAL FOR DEBUGGING
 export const scoringEvent = onchainTable(
@@ -248,3 +248,59 @@ export const batchOperation = onchainTable(
     requestTimestampIndex: index().on(table.requestTimestamp),
   })
 );
+
+// Relations
+export const poolEventRelations = relations(poolEvent, ({ many }) => ({
+  loans: many(loanEvent),
+}));
+
+export const loanEventRelations = relations(loanEvent, ({ one, many }) => ({
+  pool: one(poolEvent, {
+    fields: [loanEvent.poolId],
+    references: [poolEvent.poolId],
+  }),
+  auctions: many(auctionEvent),
+  domain: one(domainAnalytics, {
+    fields: [loanEvent.domainTokenId],
+    references: [domainAnalytics.domainTokenId],
+  }),
+}));
+
+export const auctionEventRelations = relations(auctionEvent, ({ one }) => ({
+  loan: one(loanEvent, {
+    fields: [auctionEvent.loanId],
+    references: [loanEvent.loanId],
+  }),
+  domain: one(domainAnalytics, {
+    fields: [auctionEvent.domainTokenId],
+    references: [domainAnalytics.domainTokenId],
+  }),
+}));
+
+export const domainAnalyticsRelations = relations(domainAnalytics, ({ many }) => ({
+  loans: many(loanEvent),
+  auctions: many(auctionEvent),
+  scoringEvents: many(scoringEvent),
+}));
+
+export const scoringEventRelations = relations(scoringEvent, ({ one }) => ({
+  domain: one(domainAnalytics, {
+    fields: [scoringEvent.domainTokenId],
+    references: [domainAnalytics.domainTokenId],
+  }),
+}));
+
+export const loanRequestRelations = relations(loanRequest, ({ many, one }) => ({
+  fundings: many(loanFunding),
+  domain: one(domainAnalytics, {
+    fields: [loanRequest.domainTokenId],
+    references: [domainAnalytics.domainTokenId],
+  }),
+}));
+
+export const loanFundingRelations = relations(loanFunding, ({ one }) => ({
+  request: one(loanRequest, {
+    fields: [loanFunding.requestId],
+    references: [loanRequest.requestId],
+  }),
+}));

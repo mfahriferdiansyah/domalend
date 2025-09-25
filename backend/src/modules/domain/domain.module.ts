@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 
 // AI Module for OpenAI integration
 import { AiModule } from '../ai/ai.module';
+import { IndexerModule } from '../indexer/indexer.module';
 
 // Entities
 import { DomainScore } from '../../core/database/entities/domain-score.entity';
@@ -27,6 +28,7 @@ import { ScoringController } from './controllers/scoring.controller';
     TypeOrmModule.forFeature([DomainScore, ScoringHistory]),
     HttpModule,
     AiModule,
+    IndexerModule,
   ],
   providers: [
     DomainMetadataService,

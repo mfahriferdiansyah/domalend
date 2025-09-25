@@ -41,7 +41,23 @@ export class IndexerService {
   }
 
   async queryPools(filters: any): Promise<any> {
-    const { where, limit = 20 } = filters;
+    const { where, limit = 20, includeLoans = false } = filters;
+    const loansFragment = includeLoans ? `
+      loans {
+        loanId
+        borrowerAddress
+        domainTokenId
+        domainName
+        loanAmount
+        aiScore
+        interestRate
+        eventType
+        eventTimestamp
+        repaymentDeadline
+        liquidationAttempted
+        liquidationTimestamp
+      }` : '';
+
     const query = `
       query GetPools($where: poolEventFilter, $limit: Int) {
         poolEvents(
@@ -59,6 +75,7 @@ export class IndexerService {
             eventType
             eventTimestamp
             providerAddress
+            ${loansFragment}
           }
         }
       }
@@ -83,6 +100,132 @@ export class IndexerService {
     `;
 
     return this.executeQuery(query, { where: { poolId_in: poolIds } });
+  }
+
+  async queryLoansByPool(poolId: string, limit: number = 20): Promise<any> {
+    const query = `
+      query GetLoansByPool($where: loanEventFilter, $limit: Int) {
+        loanEvents(
+          where: $where,
+          limit: $limit,
+          orderBy: "eventTimestamp",
+          orderDirection: "desc"
+        ) {
+          items {
+            loanId
+            borrowerAddress
+            domainTokenId
+            domainName
+            loanAmount
+            aiScore
+            interestRate
+            eventType
+            eventTimestamp
+            repaymentDeadline
+            poolId
+            liquidationAttempted
+            liquidationTimestamp
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { where: { poolId }, limit });
+  }
+
+  async queryDomains(filters: any): Promise<any> {
+    const { where, limit = 20, orderBy = 'lastActivityTimestamp', orderDirection = 'desc' } = filters;
+    const query = `
+      query GetDomains($where: domainAnalyticsFilter, $limit: Int, $orderBy: String, $orderDirection: String) {
+        domainAnalytics(
+          where: $where,
+          limit: $limit,
+          orderBy: $orderBy,
+          orderDirection: $orderDirection
+        ) {
+          items {
+            domainTokenId
+            domainName
+            latestAiScore
+            totalScoringRequests
+            totalLoansCreated
+            totalLoanVolume
+            hasBeenLiquidated
+            firstScoreTimestamp
+            lastActivityTimestamp
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { where, limit, orderBy, orderDirection });
+  }
+
+  async queryDomainDetail(domainTokenId: string, includeRelations: boolean = true): Promise<any> {
+    const relationsFragment = includeRelations ? `
+      loans {
+        loanId
+        borrowerAddress
+        domainTokenId
+        domainName
+        loanAmount
+        aiScore
+        interestRate
+        eventType
+        eventTimestamp
+        repaymentDeadline
+        liquidationAttempted
+        liquidationTimestamp
+      }
+      auctions {
+        auctionId
+        loanId
+        domainTokenId
+        domainName
+        borrowerAddress
+        bidderAddress
+        startingPrice
+        currentPrice
+        finalPrice
+        recoveryRate
+        eventType
+        eventTimestamp
+      }
+      scoringEvents {
+        id
+        domainTokenId
+        domainName
+        requesterAddress
+        aiScore
+        confidence
+        reasoning
+        requestTimestamp
+        status
+      }` : '';
+
+    const query = `
+      query GetDomainDetail($domainTokenId: String!) {
+        domainAnalytics(
+          where: { domainTokenId: $domainTokenId }
+          limit: 1
+        ) {
+          items {
+            domainTokenId
+            domainName
+            latestAiScore
+            totalScoringRequests
+            totalLoansCreated
+            totalLoanVolume
+            hasBeenLiquidated
+            firstScoreTimestamp
+            lastActivityTimestamp
+            ${relationsFragment}
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { domainTokenId });
   }
 
   async queryAuctions(filters: any): Promise<any> {
