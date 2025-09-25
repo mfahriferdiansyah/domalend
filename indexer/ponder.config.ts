@@ -3,9 +3,9 @@ import { createConfig } from "ponder";
 
 // V2 Contract ABIs (will be added after contract deployment)
 import { AIOracle_ABI } from "./abis/AIOracle";
-import { SatoruLending_ABI } from "./abis/SatoruLending";
-import { LoanManager_ABI } from "./abis/LoanManager";
 import { DutchAuction_ABI } from "./abis/DutchAuction";
+import { LoanManager_ABI } from "./abis/LoanManager";
+import { SatoruLending_ABI } from "./abis/SatoruLending";
 
 export default createConfig({
   chains: {

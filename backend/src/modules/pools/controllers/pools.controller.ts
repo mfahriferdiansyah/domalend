@@ -22,7 +22,9 @@ import {
   UserPoolDto,
   GetPoolsQueryDto,
   GetPoolsResponseDto,
-  GetUserPoolsResponseDto
+  GetUserPoolsResponseDto,
+  GetPoolDetailResponseDto,
+  LoanDto
 } from '../dto/pool.dto';
 
 @ApiTags('pools')
@@ -114,6 +116,80 @@ export class PoolsController {
     } catch (error) {
       this.logger.error(`Failed to get pools for user ${address}:`, error);
       throw new HttpException('Failed to fetch user pools', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get(':poolId')
+  @ApiOperation({
+    summary: 'Get pool details by ID',
+    description: 'Retrieve detailed information about a specific pool, optionally including associated loans'
+  })
+  @ApiParam({
+    name: 'poolId',
+    description: 'Pool ID',
+    example: 'pool_12345'
+  })
+  @ApiQuery({
+    name: 'includeLoans',
+    description: 'Whether to include loans associated with this pool',
+    required: false,
+    type: Boolean,
+    example: false
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pool details retrieved successfully',
+    type: GetPoolDetailResponseDto
+  })
+  @ApiResponse({ status: 404, description: 'Pool not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getPoolDetail(
+    @Param('poolId') poolId: string,
+    @Query('includeLoans') includeLoans?: string
+  ): Promise<GetPoolDetailResponseDto> {
+    this.logger.log(`Getting pool detail for poolId: ${poolId}, includeLoans: ${includeLoans}`);
+
+    const shouldIncludeLoans = includeLoans === 'true';
+
+    try {
+      // Get pool creation event
+      const poolData = await this.indexerService.queryPools({
+        where: { eventType: "created", poolId },
+        includeLoans: shouldIncludeLoans
+      });
+
+      const poolEvents = poolData.poolEvents?.items || [];
+      if (poolEvents.length === 0) {
+        throw new HttpException('Pool not found', HttpStatus.NOT_FOUND);
+      }
+
+      const pools = await this.buildConsistentPoolObjects(poolEvents);
+      if (pools.length === 0) {
+        throw new HttpException('Pool not found', HttpStatus.NOT_FOUND);
+      }
+
+      const result: GetPoolDetailResponseDto = { pool: pools[0] };
+
+      // Include loans if requested (either from relations or separate query)
+      if (shouldIncludeLoans) {
+        const poolEvent = poolEvents[0];
+        if (poolEvent.loans && poolEvent.loans.length > 0) {
+          // Use loans from relations
+          result.loans = this.buildLoanObjects(poolEvent.loans);
+        } else {
+          // Fallback to separate query
+          const loanData = await this.indexerService.queryLoansByPool(poolId, 50);
+          result.loans = this.buildLoanObjects(loanData.loanEvents?.items || []);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`Failed to get pool detail for ${poolId}:`, error);
+      throw new HttpException('Failed to fetch pool details', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -258,6 +334,24 @@ export class PoolsController {
     const totalLoans = poolLoans.length;
     const defaultedLoans = poolLoans.filter(e => e.eventType === 'defaulted').length;
     pool.defaultRate = totalLoans > 0 ? defaultedLoans / totalLoans : 0;
+  }
+
+  private buildLoanObjects(loanEvents: any[]): LoanDto[] {
+    return loanEvents.map(event => ({
+      loanId: event.loanId,
+      borrowerAddress: event.borrowerAddress,
+      domainTokenId: event.domainTokenId,
+      domainName: event.domainName,
+      loanAmount: event.loanAmount,
+      aiScore: event.aiScore,
+      interestRate: event.interestRate,
+      eventType: event.eventType,
+      eventTimestamp: event.eventTimestamp,
+      repaymentDeadline: event.repaymentDeadline,
+      poolId: event.poolId,
+      liquidationAttempted: event.liquidationAttempted,
+      liquidationTimestamp: event.liquidationTimestamp
+    }));
   }
 
   private buildPoolWhereClause(filters: { minAiScore?: number; status?: string }): any {
