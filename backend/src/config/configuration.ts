@@ -26,6 +26,7 @@ export default () => ({
     domaLendAddress: process.env.DOMALEND_ADDRESS,
     domaOwnershipToken: process.env.DOMA_OWNERSHIP_TOKEN,
     loanManagerAddress: process.env.LOAN_MANAGER_ADDRESS || '0x5365E0cf54Bccc157A0eFBb3aC77F826E27f9A49',
+    dutchAuctionAddress: process.env.DUTCH_AUCTION_ADDRESS || '0xF4eC2e259036A841D7ebd8A34fDC97311Be063d1',
   },
 
   // External APIs Configuration

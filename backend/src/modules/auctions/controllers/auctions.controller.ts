@@ -18,6 +18,7 @@ import { ethers } from 'ethers';
 
 import { IndexerService } from '../../indexer/indexer.service';
 import { AuctionPriceService } from '../services/auction-price.service';
+import { AuctionVerificationService } from '../services/auction-verification.service';
 import { DomaNftService } from '../../domain/services/doma-nft.service';
 import { DomainScoreCacheService } from '../../domain/services/domain-score-cache.service';
 import {
@@ -37,6 +38,7 @@ export class AuctionsController {
   constructor(
     private readonly indexerService: IndexerService,
     private readonly auctionPriceService: AuctionPriceService,
+    private readonly auctionVerificationService: AuctionVerificationService,
     private readonly domaNftService: DomaNftService,
     private readonly domainScoreCacheService: DomainScoreCacheService,
   ) {}
@@ -169,9 +171,33 @@ export class AuctionsController {
       }
     });
 
+    // Verify which domains are actually in auction before creating auction objects
+    const tokenIds = liquidatedLoans
+      .map(loan => loan.domainTokenId)
+      .filter(tokenId => tokenId && tokenId.trim() !== '' && tokenId !== '0');
+
+    this.logger.log(`Verifying ${tokenIds.length} domain token IDs for actual auction status...`);
+    const domainAuctionStatus = await this.auctionVerificationService.verifyMultipleDomainsInAuction(tokenIds);
+
+    // Filter to only include loans where domain is actually in DutchAuction contract
+    const actualAuctionLoans = liquidatedLoans.filter(loan => {
+      if (!loan.domainTokenId || loan.domainTokenId.trim() === '' || loan.domainTokenId === '0') {
+        this.logger.warn(`Loan ${loan.loanId} has invalid domain token ID: ${loan.domainTokenId}`);
+        return false;
+      }
+
+      const isInAuction = domainAuctionStatus.get(loan.domainTokenId) || false;
+      if (!isInAuction) {
+        this.logger.debug(`Loan ${loan.loanId} (${loan.domainName}) - domain not in auction, skipping`);
+      }
+      return isInAuction;
+    });
+
+    this.logger.log(`Filtered to ${actualAuctionLoans.length} loans with domains actually in auction`);
+
     const auctions: AuctionDto[] = [];
 
-    for (const loan of liquidatedLoans) {
+    for (const loan of actualAuctionLoans) {
       try {
         // Convert liquidation timestamp - handle both string and number formats
         this.logger.debug(`Processing loan ${loan.loanId} with timestamp: ${loan.eventTimestamp} (type: ${typeof loan.eventTimestamp})`);
@@ -253,7 +279,7 @@ export class AuctionsController {
       }
     }
 
-    this.logger.log(`Successfully built ${auctions.length} auctions from liquidated loans`);
+    this.logger.log(`Successfully built ${auctions.length} auctions from verified active auctions`);
     return auctions;
   }
 
