@@ -522,3 +522,185 @@ export class GetUserPoolsResponseDto {
     totalContribution: string;
   };
 }
+
+export class AuctionDto {
+  @ApiProperty({
+    description: 'Auction ID',
+    example: 'auction_12345',
+  })
+  auctionId: string;
+
+  @ApiProperty({
+    description: 'Associated loan ID',
+    example: 'loan_12345',
+  })
+  loanId: string;
+
+  @ApiProperty({
+    description: 'Domain token ID',
+    example: '123456',
+  })
+  domainTokenId: string;
+
+  @ApiProperty({
+    description: 'Domain name',
+    example: 'example.eth',
+  })
+  domainName: string;
+
+  @ApiProperty({
+    description: 'Borrower address',
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53',
+  })
+  borrowerAddress: string;
+
+  @ApiProperty({
+    description: 'Bidder address',
+    example: '0x47b245f2a3c7557d855e4d800890c4a524a42cc8',
+    required: false,
+  })
+  bidderAddress?: string;
+
+  @ApiProperty({
+    description: 'Starting price of the auction',
+    example: '1000000000000000000',
+    required: false,
+  })
+  startingPrice?: string;
+
+  @ApiProperty({
+    description: 'Current price of the auction',
+    example: '1500000000000000000',
+    required: false,
+  })
+  currentPrice?: string;
+
+  @ApiProperty({
+    description: 'Final price if auction ended',
+    example: '2000000000000000000',
+    required: false,
+  })
+  finalPrice?: string;
+
+  @ApiProperty({
+    description: 'Recovery rate (final price / loan amount)',
+    example: 1.5,
+    required: false,
+  })
+  recoveryRate?: number;
+
+  @ApiProperty({
+    description: 'Event type',
+    example: 'started',
+    enum: ['started', 'bid_placed', 'ended'],
+  })
+  eventType: string;
+
+  @ApiProperty({
+    description: 'Event timestamp',
+    example: '2024-01-15T10:30:00Z',
+  })
+  eventTimestamp: string;
+}
+
+export class AuctionDetailDto {
+  @ApiProperty({
+    description: 'Auction ID',
+    example: 'auction_12345',
+  })
+  auctionId: string;
+
+  @ApiProperty({
+    description: 'Associated loan ID',
+    example: 'loan_12345',
+  })
+  loanId: string;
+
+  @ApiProperty({
+    description: 'Domain token ID',
+    example: '123456',
+  })
+  domainTokenId: string;
+
+  @ApiProperty({
+    description: 'Domain name',
+    example: 'example.eth',
+  })
+  domainName: string;
+
+  @ApiProperty({
+    description: 'Borrower address',
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53',
+  })
+  borrowerAddress: string;
+
+  @ApiProperty({
+    description: 'Current status of the auction',
+    example: 'active',
+    enum: ['active', 'ended'],
+  })
+  status: string;
+
+  @ApiProperty({
+    description: 'Starting price of the auction',
+    example: '1000000000000000000',
+    required: false,
+  })
+  startingPrice?: string;
+
+  @ApiProperty({
+    description: 'Current highest bid',
+    example: '1500000000000000000',
+    required: false,
+  })
+  currentPrice?: string;
+
+  @ApiProperty({
+    description: 'Final price if auction ended',
+    example: '2000000000000000000',
+    required: false,
+  })
+  finalPrice?: string;
+
+  @ApiProperty({
+    description: 'Recovery rate (final price / loan amount)',
+    example: 1.5,
+    required: false,
+  })
+  recoveryRate?: number;
+
+  @ApiProperty({
+    description: 'Current highest bidder',
+    example: '0x47b245f2a3c7557d855e4d800890c4a524a42cc8',
+    required: false,
+  })
+  currentBidder?: string;
+
+  @ApiProperty({
+    description: 'Auction start timestamp',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+  })
+  startedAt?: string;
+
+  @ApiProperty({
+    description: 'Auction end timestamp',
+    example: '2024-01-16T10:30:00Z',
+    required: false,
+  })
+  endedAt?: string;
+
+  @ApiProperty({
+    description: 'All auction events in chronological order',
+    type: [AuctionDto],
+  })
+  events: AuctionDto[];
+}
+
+export class GetAuctionDetailResponseDto {
+  @ApiProperty({
+    description: 'Auction details with event history',
+    type: AuctionDetailDto,
+  })
+  auction: AuctionDetailDto;
+}

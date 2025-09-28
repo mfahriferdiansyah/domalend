@@ -251,13 +251,16 @@ export const batchOperation = onchainTable(
 
 // Relations
 export const poolEventRelations = relations(poolEvent, ({ many }) => ({
-  loans: many(loanEvent),
+  loans: many(loanEvent, {
+    relationName: "poolLoans",
+  }),
 }));
 
 export const loanEventRelations = relations(loanEvent, ({ one, many }) => ({
   pool: one(poolEvent, {
     fields: [loanEvent.poolId],
     references: [poolEvent.poolId],
+    relationName: "poolLoans",
   }),
   auctions: many(auctionEvent),
   domain: one(domainAnalytics, {

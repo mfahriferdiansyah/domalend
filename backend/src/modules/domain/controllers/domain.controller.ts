@@ -1,49 +1,46 @@
 import {
   Controller,
   Get,
-  Param,
-  Query,
   HttpException,
   HttpStatus,
-  UseGuards,
-  Logger
+  Logger,
+  Param,
+  Query,
+  UseGuards
 } from '@nestjs/common';
-import { ethers } from 'ethers';
 import {
-  ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiParam,
-  ApiQuery
+  ApiQuery,
+  ApiResponse,
+  ApiTags
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ethers } from 'ethers';
 
 // Services
+import { IndexerService } from '../../indexer/indexer.service';
 import { DomaNftService } from '../services/doma-nft.service';
 import { DomainScoreCacheService } from '../services/domain-score-cache.service';
-import { IndexerService } from '../../indexer/indexer.service';
 
 // DTOs
 import {
-  AddressNFTBalanceDto,
-  NFTDetailsResponseDto,
-  DomaNFTDto,
-  GetUserDomainsResponseDto,
-  EnhancedDomainDto,
-  DomainPortfolioSummaryDto,
-  DomainLoanStatusDto,
-  DomainAiScoreDto,
-  DomainLoanHistoryDto
-} from '../dto/domain.dto';
-import {
+  DomainDetailDto,
   DomainDto,
+  GetDomainDetailResponseDto,
   GetDomainsQueryDto,
   GetDomainsResponseDto,
-  DomainDetailDto,
-  GetDomainDetailResponseDto,
-  ScoringEventDto,
-  LoanDto
+  LoanDto,
+  ScoringEventDto
 } from '../../pools/dto/pool.dto';
+import {
+  AddressNFTBalanceDto,
+  DomainPortfolioSummaryDto,
+  DomaNFTDto,
+  EnhancedDomainDto,
+  GetUserDomainsResponseDto,
+  NFTDetailsResponseDto
+} from '../dto/domain.dto';
 
 @ApiTags('domains')
 @Controller('domains')
@@ -128,7 +125,7 @@ export class DomainController {
       order = 'desc' 
     } = query;
 
-    this.logger.log(`Getting scored domains: page=${page}, limit=${limit}, minAiScore=${minAiScore}, maxAiScore=${maxAiScore}`);
+    this.logger.log(`Getting scored domains: page=${page}, limit=${limit}, minAiScore=${minAiScore}, maxAiScore=${maxAiScore}, liquidatedOnly=${liquidatedOnly} (type: ${typeof liquidatedOnly})`);
 
     try {
       // Build where clause
@@ -142,10 +139,17 @@ export class DomainController {
         where.latestAiScore_lte = maxAiScore;
       }
       
-      if (liquidatedOnly === true) {
-        where.hasBeenLiquidated = true;
-      }
+      // this.logger.log(`liquidatedOnly check: ${liquidatedOnly} === true? ${liquidatedOnly === true}`);
+      // if (liquidatedOnly === true) {
+      //   this.logger.log('Adding hasBeenLiquidated = true to where clause');
+      //   where.hasBeenLiquidated = true;
+      // } else if (liquidatedOnly === false) {
+      //   this.logger.log('liquidatedOnly is false, adding hasBeenLiquidated = false to where clause');
+      //   where.hasBeenLiquidated = false;
+      // }
 
+      this.logger.log(`Final where clause: ${JSON.stringify(where)}`);
+      
       const domainData = await this.indexerService.queryDomains({
         where,
         limit: limit,
@@ -153,7 +157,7 @@ export class DomainController {
         orderDirection: order
       });
 
-      const domains = this.buildDomainObjects(domainData.domainAnalytics?.items || []);
+      const domains = this.buildDomainObjects(domainData.domainAnalyticss?.items || []);
 
       return {
         domains,
@@ -197,17 +201,15 @@ export class DomainController {
   ): Promise<GetDomainDetailResponseDto> {
     this.logger.log(`Getting domain detail for domainTokenId: ${domainTokenId}`);
 
-    const shouldIncludeRelations = includeRelations !== 'false'; // Default to true
-
+    const shouldIncludeRelations = includeRelations !== 'false'; 
+    
     try {
       const domainData = await this.indexerService.queryDomainDetail(domainTokenId, shouldIncludeRelations);
 
-      const domainItems = domainData.domainAnalytics?.items || [];
-      if (domainItems.length === 0) {
+      const domainItem = domainData.domainAnalytics;
+      if (!domainItem) {
         throw new HttpException('Domain not found', HttpStatus.NOT_FOUND);
       }
-
-      const domainItem = domainItems[0];
       const domainDetail: DomainDetailDto = {
         domainTokenId: domainItem.domainTokenId,
         domainName: domainItem.domainName,
@@ -222,16 +224,16 @@ export class DomainController {
 
       // Include relations if requested and available
       if (shouldIncludeRelations) {
-        if (domainItem.loans) {
-          domainDetail.loans = this.buildLoanObjects(domainItem.loans);
+        if (domainItem.loans?.items) {
+          domainDetail.loans = this.buildLoanObjects(domainItem.loans.items);
         }
 
-        if (domainItem.scoringEvents) {
-          domainDetail.scoringHistory = this.buildScoringEventObjects(domainItem.scoringEvents);
+        if (domainItem.scoringEvents?.items) {
+          domainDetail.scoringHistory = this.buildScoringEventObjects(domainItem.scoringEvents.items);
         }
 
-        if (domainItem.auctions) {
-          domainDetail.auctions = domainItem.auctions;
+        if (domainItem.auctions?.items) {
+          domainDetail.auctions = domainItem.auctions.items;
         }
       }
 
@@ -438,7 +440,22 @@ export class DomainController {
   }
 
   private buildLoanObjects(loanEvents: any[]): LoanDto[] {
-    return loanEvents.map(event => ({
+    // Group events by loanId and keep the latest event for each loan
+    const loanMap = new Map();
+    
+    loanEvents.forEach(event => {
+      const existingEvent = loanMap.get(event.loanId);
+      
+      // Keep the event with the latest timestamp, or if timestamps are equal, prefer events with aiScore
+      if (!existingEvent || 
+          parseInt(event.eventTimestamp) > parseInt(existingEvent.eventTimestamp) ||
+          (parseInt(event.eventTimestamp) === parseInt(existingEvent.eventTimestamp) && event.aiScore && !existingEvent.aiScore)) {
+        loanMap.set(event.loanId, event);
+      }
+    });
+    
+    // Convert map values to LoanDto array
+    return Array.from(loanMap.values()).map(event => ({
       loanId: event.loanId,
       borrowerAddress: event.borrowerAddress,
       domainTokenId: event.domainTokenId,

@@ -44,18 +44,20 @@ export class IndexerService {
     const { where, limit = 20, includeLoans = false } = filters;
     const loansFragment = includeLoans ? `
       loans {
-        loanId
-        borrowerAddress
-        domainTokenId
-        domainName
-        loanAmount
-        aiScore
-        interestRate
-        eventType
-        eventTimestamp
-        repaymentDeadline
-        liquidationAttempted
-        liquidationTimestamp
+        items {
+          loanId
+          borrowerAddress
+          domainTokenId
+          domainName
+          loanAmount
+          aiScore
+          interestRate
+          eventType
+          eventTimestamp
+          repaymentDeadline
+          liquidationAttempted
+          liquidationTimestamp
+        }
       }` : '';
 
     const query = `
@@ -137,7 +139,7 @@ export class IndexerService {
     const { where, limit = 20, orderBy = 'lastActivityTimestamp', orderDirection = 'desc' } = filters;
     const query = `
       query GetDomains($where: domainAnalyticsFilter, $limit: Int, $orderBy: String, $orderDirection: String) {
-        domainAnalytics(
+        domainAnalyticss(
           where: $where,
           limit: $limit,
           orderBy: $orderBy,
@@ -164,63 +166,64 @@ export class IndexerService {
   async queryDomainDetail(domainTokenId: string, includeRelations: boolean = true): Promise<any> {
     const relationsFragment = includeRelations ? `
       loans {
-        loanId
-        borrowerAddress
-        domainTokenId
-        domainName
-        loanAmount
-        aiScore
-        interestRate
-        eventType
-        eventTimestamp
-        repaymentDeadline
-        liquidationAttempted
-        liquidationTimestamp
+        items {
+          loanId
+          borrowerAddress
+          domainTokenId
+          domainName
+          loanAmount
+          aiScore
+          interestRate
+          eventType
+          eventTimestamp
+          repaymentDeadline
+          liquidationAttempted
+          liquidationTimestamp
+        }
       }
       auctions {
-        auctionId
-        loanId
-        domainTokenId
-        domainName
-        borrowerAddress
-        bidderAddress
-        startingPrice
-        currentPrice
-        finalPrice
-        recoveryRate
-        eventType
-        eventTimestamp
+        items {
+          auctionId
+          loanId
+          domainTokenId
+          domainName
+          borrowerAddress
+          bidderAddress
+          startingPrice
+          currentPrice
+          finalPrice
+          recoveryRate
+          eventType
+          eventTimestamp
+        }
       }
       scoringEvents {
-        id
-        domainTokenId
-        domainName
-        requesterAddress
-        aiScore
-        confidence
-        reasoning
-        requestTimestamp
-        status
+        items {
+          id
+          domainTokenId
+          domainName
+          requesterAddress
+          aiScore
+          confidence
+          reasoning
+          requestTimestamp
+          status
+        }
       }` : '';
 
     const query = `
       query GetDomainDetail($domainTokenId: String!) {
-        domainAnalytics(
-          where: { domainTokenId: $domainTokenId }
-          limit: 1
-        ) {
-          items {
-            domainTokenId
-            domainName
-            latestAiScore
-            totalScoringRequests
-            totalLoansCreated
-            totalLoanVolume
-            hasBeenLiquidated
-            firstScoreTimestamp
-            lastActivityTimestamp
-            ${relationsFragment}
-          }
+        domainAnalytics(id: $domainTokenId) {
+          domainTokenId
+          domainName
+          latestAiScore
+          totalScoringRequests
+          totalLoansCreated
+          totalLoanVolume
+          hasBeenLiquidated
+          firstScoreTimestamp
+          lastActivityTimestamp
+          ${relationsFragment}
         }
       }
     `;
@@ -255,8 +258,44 @@ export class IndexerService {
     return this.executeQuery(query, { where, limit });
   }
 
+  async queryAuctionDetail(auctionId: string): Promise<any> {
+    const query = `
+      query GetAuctionDetail($auctionId: String!) {
+        auctionEvents(
+          where: { auctionId: $auctionId }
+          orderBy: "eventTimestamp"
+          orderDirection: "asc"
+        ) {
+          items {
+            auctionId
+            loanId
+            domainTokenId
+            domainName
+            borrowerAddress
+            bidderAddress
+            startingPrice
+            currentPrice
+            finalPrice
+            recoveryRate
+            eventType
+            eventTimestamp
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { auctionId });
+  }
+
   private async executeQuery(query: string, variables: any): Promise<any> {
     try {
+      // Log the GraphQL query and variables for debugging
+      this.logger.log(`Executing GraphQL query:`, {
+        endpoint: this.graphqlEndpoint,
+        query: query.replace(/\s+/g, ' ').trim(),
+        variables: JSON.stringify(variables)
+      });
+
       const response = await fetch(this.graphqlEndpoint, {
         method: 'POST',
         headers: {
@@ -270,6 +309,9 @@ export class IndexerService {
       }
 
       const result = await response.json();
+
+      // Log the response for debugging
+      this.logger.log(`GraphQL response:`, JSON.stringify(result, null, 2));
 
       if (result.errors) {
         throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);

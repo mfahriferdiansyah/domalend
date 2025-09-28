@@ -94,7 +94,7 @@ export class ContractController {
         score: scoreResult.totalScore,
         domainName,
         cached: scoreResult.isFromCache,
-        message: `Score ${scoreResult.totalScore} submitted for ${domainName}${scoreResult.isFromCache ? ' (from cache)' : ' (freshly generated)'}`
+        message: `Score ${scoreResult.totalScore} submitted for ${domainName}`
       };
 
     } catch (error) {
