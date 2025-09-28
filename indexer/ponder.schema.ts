@@ -63,31 +63,57 @@ export const loanEvent = onchainTable(
   })
 );
 
-// Auction Events from DutchAuction
-export const auctionEvent = onchainTable(
-  "auction_event",
+// Auction state table - one record per auction
+export const auction = onchainTable(
+  "auction",
   (t) => ({
-    id: t.text().primaryKey(),
-    eventType: t.text().notNull(), // 'started', 'bid_placed', 'ended', 'cancelled'
+    id: t.text().primaryKey(), // auctionId
     auctionId: t.text().notNull(),
     loanId: t.text(),
     domainTokenId: t.text().notNull(),
     domainName: t.text(),
     borrowerAddress: t.hex(),
-    bidderAddress: t.hex(),
+    currentBidderAddress: t.hex(),
     aiScore: t.integer(),
     startingPrice: t.text(),
     currentPrice: t.text(),
     finalPrice: t.text(),
+    status: t.text().notNull(), // 'active', 'ended', 'cancelled'
     recoveryRate: t.real(), // finalPrice / loanAmount
-    eventTimestamp: t.timestamp().notNull(),
+    startedAt: t.timestamp(),
+    endedAt: t.timestamp(),
+    lastUpdated: t.timestamp().notNull(),
+    createdAt: t.timestamp().notNull(),
     blockNumber: t.bigint().notNull(),
     transactionHash: t.hex().notNull(),
   }),
   (table) => ({
     auctionIdIndex: index().on(table.auctionId),
     domainTokenIdIndex: index().on(table.domainTokenId),
+    statusIndex: index().on(table.status),
+    startedAtIndex: index().on(table.startedAt),
+  })
+);
+
+// Auction history table - event log for audit trail
+export const auctionHistory = onchainTable(
+  "auction_history",
+  (t) => ({
+    id: t.text().primaryKey(),
+    auctionId: t.text().notNull(),
+    eventType: t.text().notNull(), // 'started', 'bid_placed', 'ended', 'cancelled'
+    bidderAddress: t.hex(),
+    bidAmount: t.text(),
+    currentPrice: t.text(),
+    finalPrice: t.text(),
+    eventTimestamp: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    auctionIdIndex: index().on(table.auctionId),
     eventTypeIndex: index().on(table.eventType),
+    eventTimestampIndex: index().on(table.eventTimestamp),
   })
 );
 
@@ -262,27 +288,35 @@ export const loanEventRelations = relations(loanEvent, ({ one, many }) => ({
     references: [poolEvent.poolId],
     relationName: "poolLoans",
   }),
-  auctions: many(auctionEvent),
+  auctions: many(auction),
   domain: one(domainAnalytics, {
     fields: [loanEvent.domainTokenId],
     references: [domainAnalytics.domainTokenId],
   }),
 }));
 
-export const auctionEventRelations = relations(auctionEvent, ({ one }) => ({
+export const auctionRelations = relations(auction, ({ one, many }) => ({
   loan: one(loanEvent, {
-    fields: [auctionEvent.loanId],
+    fields: [auction.loanId],
     references: [loanEvent.loanId],
   }),
   domain: one(domainAnalytics, {
-    fields: [auctionEvent.domainTokenId],
+    fields: [auction.domainTokenId],
     references: [domainAnalytics.domainTokenId],
+  }),
+  history: many(auctionHistory),
+}));
+
+export const auctionHistoryRelations = relations(auctionHistory, ({ one }) => ({
+  auction: one(auction, {
+    fields: [auctionHistory.auctionId],
+    references: [auction.auctionId],
   }),
 }));
 
 export const domainAnalyticsRelations = relations(domainAnalytics, ({ many }) => ({
   loans: many(loanEvent),
-  auctions: many(auctionEvent),
+  auctions: many(auction),
   scoringEvents: many(scoringEvent),
 }));
 
