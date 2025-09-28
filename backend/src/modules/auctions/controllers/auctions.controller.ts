@@ -27,7 +27,10 @@ import {
   AuctionDomainDto,
   GetAuctionsQueryDto,
   GetAuctionsResponseDto,
-  GetUserAuctionsResponseDto
+  GetUserAuctionsResponseDto,
+  AuctionDetailDto,
+  AuctionEventDto,
+  GetAuctionDetailResponseDto
 } from '../dto/auction.dto';
 
 @ApiTags('auctions')
@@ -95,6 +98,103 @@ export class AuctionsController {
     } catch (error) {
       this.logger.error('Failed to get auctions:', error);
       throw new HttpException('Failed to fetch auctions', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get(':auctionId')
+  @ApiOperation({
+    summary: 'Get auction details by ID',
+    description: 'Retrieve detailed information about a specific auction including all events and current status'
+  })
+  @ApiParam({
+    name: 'auctionId',
+    description: 'Auction ID',
+    example: '6'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Auction details retrieved successfully',
+    type: GetAuctionDetailResponseDto
+  })
+  @ApiResponse({ status: 404, description: 'Auction not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getAuctionDetail(@Param('auctionId') auctionId: string): Promise<GetAuctionDetailResponseDto> {
+    this.logger.log(`Getting auction detail for auctionId: ${auctionId}`);
+
+    try {
+      // Get auction events for this specific auction
+      const auctionData = await this.indexerService.queryAuctionDetail(auctionId);
+      
+      const auctionEvents = auctionData.auctionEvents?.items || [];
+      if (auctionEvents.length === 0) {
+        throw new HttpException('Auction not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Sort events by timestamp
+      const sortedEvents = auctionEvents.sort((a, b) => 
+        parseInt(a.eventTimestamp) - parseInt(b.eventTimestamp)
+      );
+
+      // Build auction detail from events
+      const firstEvent = sortedEvents[0];
+      const lastEvent = sortedEvents[sortedEvents.length - 1];
+      
+      // Build event DTOs
+      const events: AuctionEventDto[] = sortedEvents.map(event => ({
+        auctionId: event.auctionId,
+        loanId: event.loanId,
+        domainTokenId: event.domainTokenId,
+        domainName: event.domainName,
+        borrowerAddress: event.borrowerAddress,
+        bidderAddress: event.bidderAddress,
+        startingPrice: event.startingPrice,
+        currentPrice: event.currentPrice,
+        finalPrice: event.finalPrice,
+        recoveryRate: event.recoveryRate,
+        eventType: event.eventType,
+        eventTimestamp: new Date(parseInt(event.eventTimestamp)).toISOString()
+      }));
+
+      // Determine auction status
+      const hasEndedEvent = events.some(e => e.eventType === 'ended');
+      const status = hasEndedEvent ? 'completed' : 'active';
+
+      // Get domain information if available
+      let domain: AuctionDomainDto | undefined;
+      if (firstEvent.domainTokenId) {
+        try {
+          domain = await this.buildDomainFromEvent(firstEvent);
+        } catch (error) {
+          this.logger.warn(`Failed to build domain info for auction ${auctionId}:`, error);
+        }
+      }
+
+      // Build auction detail
+      const auctionDetail: AuctionDetailDto = {
+        auctionId: firstEvent.auctionId,
+        loanId: firstEvent.loanId,
+        domainTokenId: firstEvent.domainTokenId,
+        domainName: firstEvent.domainName,
+        borrowerAddress: firstEvent.borrowerAddress,
+        status,
+        startingPrice: firstEvent.startingPrice,
+        currentPrice: lastEvent.currentPrice || lastEvent.finalPrice,
+        finalPrice: lastEvent.finalPrice,
+        recoveryRate: lastEvent.recoveryRate,
+        currentBidder: lastEvent.bidderAddress,
+        startedAt: events.length > 0 ? events[0].eventTimestamp : undefined,
+        endedAt: hasEndedEvent ? events[events.length - 1].eventTimestamp : undefined,
+        domain,
+        events
+      };
+
+      return { auction: auctionDetail };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`Failed to get auction detail for ${auctionId}:`, error);
+      throw new HttpException('Failed to fetch auction details', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -281,6 +381,53 @@ export class AuctionsController {
 
     this.logger.log(`Successfully built ${auctions.length} auctions from verified active auctions`);
     return auctions;
+  }
+
+  private async buildDomainFromEvent(event: any): Promise<AuctionDomainDto> {
+    let domainMetadata = null;
+    let aiScore = 0;
+
+    // Try to get domain metadata from NFT service if we have a valid token ID
+    if (event.domainTokenId && event.domainTokenId.trim() !== '' && event.domainTokenId !== '0') {
+      try {
+        domainMetadata = await this.domaNftService.getNFTByTokenId(event.domainTokenId);
+        this.logger.debug(`Retrieved NFT metadata for ${event.domainTokenId}: ${domainMetadata?.name || 'no name'}`);
+      } catch (error) {
+        this.logger.warn(`Failed to get NFT metadata for ${event.domainTokenId}:`, error);
+      }
+    }
+
+    // Try to get cached AI score if we have a valid domain name
+    const domainName = event.domainName || domainMetadata?.name;
+    if (domainName && domainName.trim() !== '' && domainName !== 'null' && domainName !== null) {
+      try {
+        const scoreResult = await this.domainScoreCacheService.getDomainScore(domainName);
+        aiScore = scoreResult.totalScore;
+        this.logger.debug(`Retrieved cached score for ${domainName}: ${aiScore} (cached: ${scoreResult.isFromCache})`);
+      } catch (error) {
+        this.logger.warn(`Failed to get cached score for ${domainName}:`, error);
+      }
+    }
+
+    // Use event's domain name or fallback to NFT metadata name or create placeholder
+    const finalDomainName = domainName || `domain-${event.auctionId}.unknown`;
+
+    return {
+      tokenId: event.domainTokenId || event.auctionId,
+      name: finalDomainName,
+      metadata: domainMetadata || {
+        tokenId: event.domainTokenId || event.auctionId,
+        owner: event.borrowerAddress || '0x0000000000000000000000000000000000000000',
+        name: finalDomainName,
+        description: 'Domain Ownership Token',
+        image: '',
+        externalUrl: '',
+        attributes: []
+      },
+      aiScore,
+      tld: domainMetadata?.tld || (finalDomainName ? finalDomainName.split('.').pop() : '') || '',
+      characterLength: domainMetadata?.characterLength || (finalDomainName ? finalDomainName.split('.')[0].length : 0)
+    };
   }
 
   private async buildDomainFromLoan(loan: any): Promise<AuctionDomainDto> {
