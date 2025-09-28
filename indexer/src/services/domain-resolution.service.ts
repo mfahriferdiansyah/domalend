@@ -74,6 +74,12 @@ export class DomainResolutionService {
     try {
       console.log(`[DomainResolver] Resolving tokenId: ${tokenId}`);
 
+      // Validate tokenId range (Doma domains are huge numbers, small numbers are likely invalid)
+      if (tokenId < 1000000000000000000n) {
+        console.warn(`[DomainResolver] ⚠️ Suspicious small tokenId: ${tokenId}, skipping resolution`);
+        return `invalid-${tokenId}`;
+      }
+
       // Get tokenURI from contract
       const tokenURI = await this.client.readContract({
         address: this.domaProtocolAddress,

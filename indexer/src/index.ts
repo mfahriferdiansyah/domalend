@@ -219,7 +219,14 @@ ponder.on("AIOracle:BatchScoringRequested", async ({ event, context }) => {
 
       // Trigger backend scoring for this domain and let backend handle contract submission
       try {
-        const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+        // Safely resolve domain name with fallback for invalid tokenIds
+        let domainName: string;
+        try {
+          domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+        } catch (resolveError) {
+          console.warn(`[AIOracle] Failed to resolve domain name for tokenId ${domainTokenId}, using fallback:`, resolveError);
+          domainName = `domain-${domainTokenId}`;
+        }
         const scoreData = await backendApi.scoreDomain(domainName);
 
         // Update with backend response
@@ -653,21 +660,21 @@ ponder.on("LoanManager:LoanRepaid", async ({ event, context }) => {
  */
 
 ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
-  const { auctionId, loanId, domainTokenId, startingPrice, startTime } = event.args;
+  const { auctionId, loanId, domainTokenId, borrower, startingPrice, reservePrice, startTimestamp, endTimestamp, aiScore, domainName } = event.args;
 
   console.log(`🏛️ [DutchAuction] Auction started: ${auctionId} for loan ${loanId} (domain: ${domainTokenId})`);
 
   try {
-    // Find the original loan to get additional data
+    // Find the original loan to get additional data (if needed)
     const allLoans = await context.db.sql.select().from(loanEvent);
     const originalLoan = allLoans.find?.((loan: any) =>
       loan.loanId === loanId.toString() && loan.eventType === 'created_instant'
     ) || null;
 
-    // Resolve domain name
-    const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+    // Always resolve domain name from tokenId, ignore event data completely
+    const resolvedDomainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
 
-    const timestamp = new Date(Number(event.block.timestamp) * 1000);
+    const timestamp = new Date(Number(startTimestamp) * 1000);
 
     // Insert into main auction table
     await context.db.insert(auction).values({
@@ -675,9 +682,9 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
       auctionId: auctionId.toString(),
       loanId: loanId.toString(),
       domainTokenId: domainTokenId.toString(),
-      domainName,
-      borrowerAddress: originalLoan?.borrowerAddress,
-      aiScore: originalLoan?.aiScore,
+      domainName: resolvedDomainName,
+      borrowerAddress: borrower,
+      aiScore: aiScore.toString(),
       startingPrice: startingPrice.toString(),
       currentPrice: startingPrice.toString(),
       status: 'active',
@@ -700,9 +707,9 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
     });
 
     // Update domain analytics to mark as liquidated
-    await updateDomainAnalyticsForLiquidation(context, domainTokenId, domainName);
+    await updateDomainAnalyticsForLiquidation(context, domainTokenId, resolvedDomainName);
 
-    console.log(`✅ [DutchAuction] Auction start recorded: ${auctionId} for domain ${domainName}`);
+    console.log(`✅ [DutchAuction] Auction start recorded: ${auctionId} for domain ${resolvedDomainName}`);
   } catch (error) {
     console.error(`❌ [DutchAuction] Failed to process auction started event:`, error);
   }
