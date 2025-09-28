@@ -6,7 +6,8 @@ import { DomainResolutionService } from "./services/domain-resolution.service";
 import {
   scoringEvent,
   loanEvent,
-  auctionEvent,
+  auction,
+  auctionHistory,
   poolEvent,
   loanRequest,
   loanFunding,
@@ -658,7 +659,6 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
 
   try {
     // Find the original loan to get additional data
-    // Find the original loan using new Ponder SQL API
     const allLoans = await context.db.sql.select().from(loanEvent);
     const originalLoan = allLoans.find?.((loan: any) =>
       loan.loanId === loanId.toString() && loan.eventType === 'created_instant'
@@ -667,9 +667,11 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
     // Resolve domain name
     const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
 
-    await context.db.insert(auctionEvent).values({
-      id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'started',
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Insert into main auction table
+    await context.db.insert(auction).values({
+      id: auctionId.toString(),
       auctionId: auctionId.toString(),
       loanId: loanId.toString(),
       domainTokenId: domainTokenId.toString(),
@@ -678,7 +680,21 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
       aiScore: originalLoan?.aiScore,
       startingPrice: startingPrice.toString(),
       currentPrice: startingPrice.toString(),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      status: 'active',
+      startedAt: timestamp,
+      lastUpdated: timestamp,
+      createdAt: timestamp,
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    // Insert into auction history
+    await context.db.insert(auctionHistory).values({
+      id: `${event.transaction.hash}-${event.log.logIndex}`,
+      auctionId: auctionId.toString(),
+      eventType: 'started',
+      currentPrice: startingPrice.toString(),
+      eventTimestamp: timestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
@@ -698,30 +714,30 @@ ponder.on("DutchAuction:BidPlaced", async ({ event, context }) => {
   console.log(`💰 [DutchAuction] Bid placed: ${auctionId} by ${bidder} (${bidAmount})`);
 
   try {
-    // Find the auction start event to get domain information
-    // Find the auction start event using new Ponder SQL API
-    const allAuctions = await context.db.sql.select().from(auctionEvent);
-    const auctionStart = allAuctions.find?.((auction: any) =>
-      auction.auctionId === auctionId.toString() && auction.eventType === 'started'
-    ) || null;
+    const eventTimestamp = new Date(Number(event.block.timestamp) * 1000);
 
-    await context.db.insert(auctionEvent).values({
+    // Update the main auction table with latest bid info
+    await context.db.update(auction, { id: auctionId.toString() })
+      .set({
+        currentBidderAddress: bidder,
+        currentPrice: currentPrice.toString(),
+        lastUpdated: eventTimestamp,
+      });
+
+    // Insert into auction history
+    await context.db.insert(auctionHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'bid_placed',
       auctionId: auctionId.toString(),
-      loanId: auctionStart?.loanId,
-      domainTokenId: auctionStart?.domainTokenId || '',
-      domainName: auctionStart?.domainName,
-      borrowerAddress: auctionStart?.borrowerAddress,
+      eventType: 'bid_placed',
       bidderAddress: bidder,
-      aiScore: auctionStart?.aiScore,
-      currentPrice: currentPrice.toString(), // Use currentPrice instead of bidAmount
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      bidAmount: bidAmount.toString(),
+      currentPrice: currentPrice.toString(),
+      eventTimestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
 
-    console.log(`✅ [DutchAuction] Bid recorded for auction ${auctionId}`);
+    console.log(`✅ [DutchAuction] Bid recorded for auction ${auctionId} (current price: ${currentPrice})`);
   } catch (error) {
     console.error(`❌ [DutchAuction] Failed to process bid placed event:`, error);
   }
@@ -733,12 +749,7 @@ ponder.on("DutchAuction:AuctionEnded", async ({ event, context }) => {
   console.log(`🎉 [DutchAuction] Auction ended: ${auctionId} won by ${winner} for ${finalPrice}`);
 
   try {
-    // Find the auction start event to get loan and domain information
-    // Find the auction start event using new Ponder SQL API
-    const allAuctions = await context.db.sql.select().from(auctionEvent);
-    const auctionStart = allAuctions.find?.((auction: any) =>
-      auction.auctionId === auctionId.toString() && auction.eventType === 'started'
-    ) || null;
+    const eventTimestamp = new Date(Number(event.block.timestamp) * 1000);
 
     // Calculate recovery rate (final price / original loan amount)
     let recoveryRate = 0;
@@ -747,20 +758,25 @@ ponder.on("DutchAuction:AuctionEnded", async ({ event, context }) => {
       recoveryRate = Number(finalPriceBig * 10000n / loanAmount) / 10000;
     }
 
-    await context.db.insert(auctionEvent).values({
+    // Update the main auction table with final results
+    await context.db.update(auction, { id: auctionId.toString() })
+      .set({
+        currentBidderAddress: winner,
+        finalPrice: finalPrice.toString(),
+        status: 'ended',
+        recoveryRate,
+        endedAt: eventTimestamp,
+        lastUpdated: eventTimestamp,
+      });
+
+    // Insert into auction history
+    await context.db.insert(auctionHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'ended',
       auctionId: auctionId.toString(),
-      loanId: loanId.toString(),
-      domainTokenId: domainTokenId.toString(),
-      domainName: auctionStart?.domainName,
-      borrowerAddress: auctionStart?.borrowerAddress,
+      eventType: 'ended',
       bidderAddress: winner,
-      aiScore: auctionStart?.aiScore,
-      startingPrice: auctionStart?.startingPrice,
       finalPrice: finalPrice.toString(),
-      recoveryRate,
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
@@ -777,24 +793,22 @@ ponder.on("DutchAuction:AuctionCancelled", async ({ event, context }) => {
   console.log(`❌ [DutchAuction] Auction cancelled: ${auctionId} - ${reason}`);
 
   try {
-    // Find the auction start event to get domain and loan information
-    // Find the auction start event using new Ponder SQL API
-    const allAuctions = await context.db.sql.select().from(auctionEvent);
-    const auctionStart = allAuctions.find?.((auction: any) =>
-      auction.auctionId === auctionId.toString() && auction.eventType === 'started'
-    ) || null;
+    const eventTimestamp = new Date(Number(event.block.timestamp) * 1000);
 
-    await context.db.insert(auctionEvent).values({
+    // Update the main auction table to cancelled status
+    await context.db.update(auction, { id: auctionId.toString() })
+      .set({
+        status: 'cancelled',
+        endedAt: eventTimestamp,
+        lastUpdated: eventTimestamp,
+      });
+
+    // Insert into auction history
+    await context.db.insert(auctionHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'cancelled',
       auctionId: auctionId.toString(),
-      loanId: auctionStart?.loanId,
-      domainTokenId: auctionStart?.domainTokenId || '0',
-      domainName: auctionStart?.domainName,
-      borrowerAddress: auctionStart?.borrowerAddress,
-      aiScore: auctionStart?.aiScore,
-      startingPrice: auctionStart?.startingPrice,
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventType: 'cancelled',
+      eventTimestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
