@@ -1,0 +1,20 @@
+{
+    "INDEXER_URLS": {
+      "50002": "https://api.goldsky.com/api/public/project_cma8am8gdyorv01yy8fo11s91/subgraphs/gtx-clob/1.0.3/gn",
+      "11155931": "https://indexer-rise.gtxdex.xyz",
+      "1918988905": "https://indexer-rise.gtxdex.xyz",
+      "4661": "https://indexer-rise.gtxdex.xyz"
+    },
+    "WEBSOCKET_URLS": {
+      "50002": "ws://api.goldsky.com/api/public/project_cma8am8gdyorv01yy8fo11s91/subgraphs/gtx-clob/1.0.3/gn",
+      "11155931": "wss://indexer-rise.gtxdex.xyz/ws",
+      "1918988905": "wss://indexer-rise.gtxdex.xyz/ws",
+      "4661": "wss://indexer-rise.gtxdex.xyz/ws"
+    },
+    "EXPLORER_URLS": {
+      "50002": "https://pharosscan.xyz/tx/",
+      "11155931": "https://explorer.testnet.riselabs.xyz/tx/",
+      "1918988905": "https://rari-testnet.hub.caldera.xyz/tx/",
+      "4661": "https://appchaintestnet.hub.caldera.xyz/tx/"
+    }
+  }
