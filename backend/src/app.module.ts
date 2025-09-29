@@ -12,6 +12,7 @@ import { LiquidationModule } from './modules/liquidation/liquidation.module';
 import { PoolsModule } from './modules/pools/pools.module';
 import { AuctionsModule } from './modules/auctions/auctions.module';
 import { LoansModule } from './modules/loans/loans.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 // Core Modules
 import { DatabaseModule } from './core/database/database.module';
@@ -56,6 +57,7 @@ import configuration from './config/configuration';
     PoolsModule,
     AuctionsModule,
     LoansModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

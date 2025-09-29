@@ -232,59 +232,240 @@ export class IndexerService {
   }
 
   async queryAuctions(filters: any): Promise<any> {
-    const { where, limit = 20 } = filters;
+    const { where, limit = 20, orderBy = 'createdAt', orderDirection = 'desc' } = filters;
     const query = `
-      query GetAuctions($where: auctionEventFilter, $limit: Int) {
-        auctionEvents(
+      query GetAuctions($where: auctionFilter, $limit: Int, $orderBy: String, $orderDirection: String) {
+        auctions(
           where: $where,
-          limit: $limit
+          limit: $limit,
+          orderBy: $orderBy,
+          orderDirection: $orderDirection
         ) {
           items {
+            id
             auctionId
             loanId
             domainTokenId
             domainName
             borrowerAddress
-            bidderAddress
+            currentBidderAddress
+            aiScore
             startingPrice
             currentPrice
-            eventType
-            eventTimestamp
+            finalPrice
+            status
+            recoveryRate
+            startedAt
+            endedAt
+            lastUpdated
+            createdAt
+            blockNumber
+            transactionHash
           }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
+          totalCount
         }
       }
     `;
 
-    return this.executeQuery(query, { where, limit });
+    return this.executeQuery(query, { where, limit, orderBy, orderDirection });
   }
 
   async queryAuctionDetail(auctionId: string): Promise<any> {
     const query = `
       query GetAuctionDetail($auctionId: String!) {
-        auctionEvents(
-          where: { auctionId: $auctionId }
-          orderBy: "eventTimestamp"
-          orderDirection: "asc"
-        ) {
-          items {
-            auctionId
+        auction(id: $auctionId) {
+          id
+          auctionId
+          loanId
+          domainTokenId
+          domainName
+          borrowerAddress
+          currentBidderAddress
+          aiScore
+          startingPrice
+          currentPrice
+          finalPrice
+          status
+          recoveryRate
+          startedAt
+          endedAt
+          lastUpdated
+          createdAt
+          blockNumber
+          transactionHash
+          loan {
             loanId
+            borrowerAddress
             domainTokenId
             domainName
-            borrowerAddress
-            bidderAddress
-            startingPrice
-            currentPrice
-            finalPrice
-            recoveryRate
+            loanAmount
+            aiScore
+            interestRate
             eventType
             eventTimestamp
+            repaymentDeadline
+          }
+          domain {
+            domainTokenId
+            domainName
+            latestAiScore
+            totalScoringRequests
+            totalLoansCreated
+            totalLoanVolume
+            hasBeenLiquidated
+            firstScoreTimestamp
+            lastActivityTimestamp
+          }
+          history(orderBy: "eventTimestamp", orderDirection: "asc") {
+            items {
+              id
+              auctionId
+              eventType
+              bidderAddress
+              bidAmount
+              currentPrice
+              finalPrice
+              eventTimestamp
+              blockNumber
+              transactionHash
+            }
           }
         }
       }
     `;
 
     return this.executeQuery(query, { auctionId });
+  }
+
+  async queryUserDashboardData(userAddress: string): Promise<any> {
+    const query = `
+      query GetUserDashboard($userAddress: String!) {
+        # Get user's loans
+        userLoans: loanEvents(
+          where: { borrowerAddress: $userAddress }
+          orderBy: "eventTimestamp"
+          orderDirection: "desc"
+          limit: 50
+        ) {
+          items {
+            loanId
+            borrowerAddress
+            domainTokenId
+            domainName
+            loanAmount
+            aiScore
+            interestRate
+            eventType
+            eventTimestamp
+            repaymentDeadline
+            poolId
+            liquidationAttempted
+            liquidationTimestamp
+          }
+        }
+
+        # Get user's pool events (liquidity provision)
+        userPoolEvents: poolEvents(
+          where: { 
+            OR: [
+              { creatorAddress: $userAddress }
+              { providerAddress: $userAddress }
+            ]
+          }
+          orderBy: "eventTimestamp"
+          orderDirection: "desc"
+          limit: 50
+        ) {
+          items {
+            poolId
+            creatorAddress
+            providerAddress
+            minAiScore
+            interestRate
+            liquidityAmount
+            eventType
+            eventTimestamp
+          }
+        }
+
+        # Get user's auction activities
+        userAuctions: auctions(
+          where: { 
+            OR: [
+              { borrowerAddress: $userAddress }
+              { currentBidderAddress: $userAddress }
+            ]
+          }
+          orderBy: "createdAt"
+          orderDirection: "desc"
+          limit: 20
+        ) {
+          items {
+            id
+            auctionId
+            loanId
+            domainTokenId
+            domainName
+            borrowerAddress
+            currentBidderAddress
+            startingPrice
+            currentPrice
+            finalPrice
+            status
+            recoveryRate
+            startedAt
+            endedAt
+          }
+        }
+
+        # Get recent auctions for opportunities
+        recentAuctions: auctions(
+          where: { status: "active" }
+          orderBy: "startedAt"
+          orderDirection: "desc"
+          limit: 10
+        ) {
+          items {
+            id
+            auctionId
+            domainTokenId
+            domainName
+            startingPrice
+            currentPrice
+            status
+            startedAt
+            endedAt
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { userAddress });
+  }
+
+  async queryUserPoolStats(userAddress: string): Promise<any> {
+    const query = `
+      query GetUserPoolStats($userAddress: String!) {
+        poolEvents(
+          where: { providerAddress: $userAddress }
+        ) {
+          items {
+            poolId
+            liquidityAmount
+            eventType
+            eventTimestamp
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { userAddress });
   }
 
   private async executeQuery(query: string, variables: any): Promise<any> {
