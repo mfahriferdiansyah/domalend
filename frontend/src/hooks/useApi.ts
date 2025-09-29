@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { domaLendAPI } from '@/services/domalend-api';
 
 export interface ApiState<T> {
@@ -32,11 +32,15 @@ export function useApi<T>(
     error: null,
   });
 
+  // Use ref to store the latest apiCall without causing re-renders
+  const apiCallRef = useRef(apiCall);
+  apiCallRef.current = apiCall;
+
   const execute = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const data = await apiCall();
+      const data = await apiCallRef.current();
       setState({ data, loading: false, error: null });
       return data;
     } catch (error) {
@@ -44,7 +48,7 @@ export function useApi<T>(
       setState({ data: null, loading: false, error: errorMessage });
       throw error;
     }
-  }, [apiCall]);
+  }, []);
 
   const refresh = useCallback(() => {
     return execute();
@@ -54,14 +58,14 @@ export function useApi<T>(
     if (immediate) {
       execute();
     }
-  }, [execute, immediate]);
+  }, [immediate]);
 
   useEffect(() => {
     if (pollingInterval && pollingInterval > 0) {
       const interval = setInterval(execute, pollingInterval);
       return () => clearInterval(interval);
     }
-  }, [execute, pollingInterval]);
+  }, [pollingInterval]);
 
   return {
     ...state,
@@ -95,11 +99,19 @@ export function usePaginatedApi<T>(
     },
   });
 
-  const execute = useCallback(async (page = state.pagination.currentPage) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+  // Use ref to store the latest apiCall without causing re-renders
+  const apiCallRef = useRef(apiCall);
+  apiCallRef.current = apiCall;
+
+  const execute = useCallback(async (page?: number) => {
+    setState(prev => {
+      const currentPage = page ?? prev.pagination.currentPage;
+      return { ...prev, loading: true, error: null };
+    });
     
     try {
-      const response = await apiCall({ page, limit: itemsPerPage });
+      const currentPage = page ?? state.pagination.currentPage;
+      const response = await apiCallRef.current({ page: currentPage, limit: itemsPerPage });
       const totalPages = Math.ceil(response.total / itemsPerPage);
       
       setState({
@@ -107,7 +119,7 @@ export function usePaginatedApi<T>(
         loading: false,
         error: null,
         pagination: {
-          currentPage: page,
+          currentPage,
           totalPages,
           totalItems: response.total,
           itemsPerPage,
@@ -124,7 +136,7 @@ export function usePaginatedApi<T>(
       }));
       throw error;
     }
-  }, [apiCall, itemsPerPage, state.pagination.currentPage]);
+  }, [itemsPerPage]);
 
   const goToPage = useCallback((page: number) => {
     if (page >= 1 && page <= state.pagination.totalPages) {
@@ -140,11 +152,12 @@ export function usePaginatedApi<T>(
     return goToPage(state.pagination.currentPage - 1);
   }, [goToPage, state.pagination.currentPage]);
 
+  // Use a separate effect for initial execution to avoid dependency loops
   useEffect(() => {
     if (immediate) {
-      execute();
+      execute(initialPage);
     }
-  }, [execute, immediate]);
+  }, [immediate, initialPage]);
 
   return {
     ...state,
@@ -152,7 +165,7 @@ export function usePaginatedApi<T>(
     goToPage,
     nextPage,
     prevPage,
-    refresh: () => execute(state.pagination.currentPage),
+    refresh: () => execute(),
     reset: () => setState({
       data: [],
       loading: false,
