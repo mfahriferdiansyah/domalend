@@ -6,9 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Filter, Grid, List, Clock, TrendingDown, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, Grid, List, Clock, TrendingDown, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { domaLendAPI, Auction } from '@/services/domalend-api';
+import { Auction } from '@/services/domalend-api';
+import { useAuctions, usePlaceBid } from '@/hooks/useDomaLendApi';
+import { ApiErrorState } from '@/components/common/api-error-boundary';
+import { GridLoadingState } from '@/components/common/api-loading-state';
+import { Pagination } from '@/components/common/pagination';
 
 interface AuctionWithCalculated extends Auction {
   timeLeft: number; // in hours
@@ -18,95 +22,60 @@ interface AuctionWithCalculated extends Auction {
 }
 
 const AuctionsPage: NextPage = () => {
-  const [auctions, setAuctions] = useState<AuctionWithCalculated[]>([]);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [loading, setLoading] = useState(true);
   const [bidAmounts, setBidAmounts] = useState<Record<string, string>>({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalAuctions, setTotalAuctions] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  
+  const { 
+    data: auctions = [], 
+    loading, 
+    error, 
+    pagination,
+    refresh,
+    goToPage,
+    nextPage,
+    prevPage
+  } = useAuctions();
+  
+  const { mutate: placeBid, loading: bidLoading } = usePlaceBid();
+  
+  // Process auctions to add calculated fields
+  const processedAuctions: AuctionWithCalculated[] = (auctions || []).map(auction => {
+    // Convert from micro units (6 decimals) to dollars
+    const startingPriceNumber = parseFloat(auction.startingPrice) / 1e6;
+    const currentPriceNumber = parseFloat(auction.currentPrice) / 1e6;
+    const decayPerSecond = parseFloat(auction.decayPerSecond);
 
-  const fetchAuctions = async (page = 1) => {
-    try {
-      setLoading(true);
-      setError(null);
+    // Calculate time left based on auction start time and current price decay
+    const startTime = parseInt(auction.auctionStartedAt);
+    const now = Date.now();
 
-      const response = await domaLendAPI.getAuctions({
-        page,
-        limit: 20,
-        sortBy: 'auctionStartedAt',
-        order: 'desc'
-      });
+    // Calculate price decay rate per day
+    const priceDecayRate = (decayPerSecond * 86400) / startingPriceNumber * 100;
 
-      const processedAuctions: AuctionWithCalculated[] = response.auctions.map(auction => {
-        // Convert from micro units (6 decimals) to dollars
-        const startingPriceNumber = parseFloat(auction.startingPrice) / 1e6;
-        const currentPriceNumber = parseFloat(auction.currentPrice) / 1e6;
-        const decayPerSecond = parseFloat(auction.decayPerSecond);
+    // Estimate remaining time based on price decay to reserve price (rough estimate)
+    const reservePrice = currentPriceNumber * 0.5; // Assume reserve is 50% of current
+    const timeToReserve = (currentPriceNumber - reservePrice) / (decayPerSecond / 1e6);
+    const timeLeft = Math.max(0, timeToReserve / 3600); // Convert to hours
 
-        // Calculate time left based on auction start time and current price decay
-        const startTime = parseInt(auction.auctionStartedAt);
-        const now = Date.now();
-        const elapsedSeconds = (now - startTime) / 1000;
+    return {
+      ...auction,
+      timeLeft,
+      currentPriceNumber,
+      startingPriceNumber,
+      priceDecayRate
+    };
+  });
 
-        // Calculate price decay rate per day
-        const priceDecayRate = (decayPerSecond * 86400) / startingPriceNumber * 100;
-
-        // Estimate remaining time based on price decay to reserve price (rough estimate)
-        const reservePrice = currentPriceNumber * 0.5; // Assume reserve is 50% of current
-        const timeToReserve = (currentPriceNumber - reservePrice) / (decayPerSecond / 1e6);
-        const timeLeft = Math.max(0, timeToReserve / 3600); // Convert to hours
-
-        return {
-          ...auction,
-          timeLeft,
-          currentPriceNumber,
-          startingPriceNumber,
-          priceDecayRate
-        };
-      });
-
-      setAuctions(processedAuctions);
-      setTotalAuctions(response.total);
-      setTotalPages(Math.ceil(response.total / 20));
-      setCurrentPage(page);
-    } catch (err) {
-      console.error('Failed to fetch auctions:', err);
-      setError('Failed to load auctions. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Update prices every minute for active auctions
   useEffect(() => {
-    fetchAuctions(currentPage);
-
-    // Update prices every minute
     const interval = setInterval(() => {
-      setAuctions(prevAuctions =>
-        prevAuctions.map(auction => {
-          if (auction.status === 'active' && auction.timeLeft > 0) {
-            const decayPerSecond = parseFloat(auction.decayPerSecond) / 1e6;
-            const newPrice = Math.max(
-              auction.currentPriceNumber - (decayPerSecond * 60), // 60 seconds
-              auction.currentPriceNumber * 0.5 // Assume reserve is 50%
-            );
-            return {
-              ...auction,
-              currentPriceNumber: newPrice,
-              timeLeft: Math.max(0, auction.timeLeft - (1 / 60)) // Decrease by 1 minute
-            };
-          }
-          return auction;
-        })
-      );
+      refresh(); // Refresh auction data every minute
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [currentPage]);
+  }, [refresh]);
 
   const formatTimeLeft = (hours: number) => {
     if (hours <= 0) return 'Ended';
@@ -126,11 +95,16 @@ const AuctionsPage: NextPage = () => {
     const bidAmount = bidAmounts[auctionId];
     if (!bidAmount) return;
 
-    // TODO: Implement bid placement logic
-    console.log(`Placing bid of $${bidAmount} on auction ${auctionId}`);
+    try {
+      await placeBid({ auctionId, amount: parseFloat(bidAmount) });
+      setBidAmounts(prev => ({ ...prev, [auctionId]: '' }));
+      refresh(); // Refresh auction data after successful bid
+    } catch (error) {
+      console.error('Failed to place bid:', error);
+    }
   };
 
-  const filteredAuctions = auctions.filter(auction => {
+  const filteredAuctions = processedAuctions.filter(auction => {
     // Filter by search term
     const matchesSearch = searchTerm.length < 2 ||
       auction.domain.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -158,25 +132,13 @@ const AuctionsPage: NextPage = () => {
     }
   };
 
-  const totalActive = auctions.filter(a => a.status === 'active').length;
-  const endingSoon = auctions.filter(a => a.status === 'active' && a.timeLeft <= 24).length;
+  const totalActive = processedAuctions.filter(a => a.status === 'active').length;
+  const endingSoon = processedAuctions.filter(a => a.status === 'active' && a.timeLeft <= 24).length;
 
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-48 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
+        <GridLoadingState items={6} columns={2} />
       </div>
     );
   }
@@ -184,10 +146,7 @@ const AuctionsPage: NextPage = () => {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-12">
-          <p className="text-red-500 mb-4">{error}</p>
-          <Button onClick={() => fetchAuctions(currentPage)}>Retry</Button>
-        </div>
+        <ApiErrorState error={error} onRetry={refresh} />
       </div>
     );
   }
@@ -223,7 +182,7 @@ const AuctionsPage: NextPage = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setActiveTab('all')}>
-                All ({auctions.length})
+                All ({processedAuctions.length})
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab('active')}>
                 Active ({totalActive})
@@ -232,7 +191,7 @@ const AuctionsPage: NextPage = () => {
                 Ending Soon ({endingSoon})
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setActiveTab('ended')}>
-                Ended ({auctions.filter(a => a.status === 'ended').length})
+                Ended ({processedAuctions.filter(a => a.status === 'ended').length})
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -266,7 +225,7 @@ const AuctionsPage: NextPage = () => {
           {activeTab !== 'all' && ` • Showing ${activeTab.replace('-', ' ')}`}
         </p>
 
-        <Button variant="ghost" size="sm" onClick={() => fetchAuctions(currentPage)}>
+        <Button variant="ghost" size="sm" onClick={refresh}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -413,9 +372,9 @@ const AuctionsPage: NextPage = () => {
                           <Button
                             className="w-full"
                             onClick={() => handlePlaceBid(auction.auctionId)}
-                            disabled={!bidAmounts[auction.auctionId]}
+                            disabled={!bidAmounts[auction.auctionId] || bidLoading}
                           >
-                            Place Bid
+                            {bidLoading ? 'Placing Bid...' : 'Place Bid'}
                           </Button>
                           <Link href={`/auctions/${auction.auctionId}`}>
                             <Button variant="outline" className="w-full">
@@ -475,35 +434,17 @@ const AuctionsPage: NextPage = () => {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-8">
-          <div className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, totalAuctions)} of {totalAuctions} auctions
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchAuctions(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-            <span className="text-sm text-gray-600">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchAuctions(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+      {pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          itemsPerPage={pagination.itemsPerPage}
+          onPageChange={goToPage}
+          onPrevious={prevPage}
+          onNext={nextPage}
+          className="mt-8"
+        />
       )}
     </div>
   );

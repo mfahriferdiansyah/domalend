@@ -3,6 +3,32 @@
 
 This is a [RainbowKit](https://rainbowkit.com) + [wagmi](https://wagmi.sh) + [Next.js](https://nextjs.org/) project bootstrapped with [`create-rainbowkit`](https://github.com/rainbow-me/rainbowkit/tree/main/packages/create-rainbowkit).
 
+## Environment Configuration
+
+Copy the example environment file and configure your variables:
+
+```bash
+cp .env.example .env.local
+```
+
+### Environment Variables
+
+#### DomaLend API Configuration
+- `NEXT_PUBLIC_BACKEND_API_URL` - Backend API URL for pool and user domain data
+
+#### Application Features
+- `NEXT_PUBLIC_WAITLIST_MODE` - Enable/disable waitlist mode (redirects all pages to waitlist)
+
+#### External Services
+- `NEXT_PUBLIC_MAILCHIMP_API_KEY` - Mailchimp API key for newsletter/waitlist
+- `NEXT_PUBLIC_MAILCHIMP_AUDIENCE_ID` - Mailchimp audience ID
+- `NEXT_PUBLIC_MAILCHIMP_API_SERVER` - Mailchimp API server region
+
+#### Trading & Blockchain
+- `NEXT_PUBLIC_DEFAULT_CHAIN` - Default blockchain chain ID
+- `NEXT_PUBLIC_USE_SUBGRAPH` - Enable/disable subgraph usage
+- `ENABLED_CHAINS` - Comma-separated list of enabled chain IDs
+
 ## Getting Started
 
 First, run the development server:

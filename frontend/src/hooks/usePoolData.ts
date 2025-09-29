@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { domaLendAPI } from '@/services/domalend-api';
+// Legacy wrapper for the new standardized API hooks
+// This file provides backward compatibility for existing components
+
+import { usePools, useUserPools as useUserPoolsApi, usePool } from '@/hooks/useDomaLendApi';
 
 export interface PoolData {
   poolId: string;
@@ -32,90 +34,84 @@ export interface UserPoolData {
   totalLiquidity: string;
 }
 
+// Wrapper for backward compatibility
 export const usePoolData = () => {
-  const [data, setData] = useState<PoolData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refresh } = usePools();
+  
+  // Transform data to match legacy interface
+  const transformedData = (data || []).map(pool => ({
+    poolId: pool.poolId,
+    poolName: pool.poolId, // Using poolId as name for now
+    totalLiquidity: pool.totalLiquidity,
+    availableLiquidity: pool.totalLiquidity, // Assuming same for now
+    apy: `${pool.interestRate}%`,
+    minLoanAmount: '0',
+    maxLoanAmount: '1000000',
+    loanToValueRatio: '80%',
+    poolType: (pool.poolType || 'custom') as 'instant' | 'custom' | 'crowdfunded',
+    creator: pool.creator,
+    loans: []
+  }));
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await domaLendAPI.getPools();
-        setData(response.pools || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch pool data');
-        console.error('Error fetching pool data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  return { data, loading, error, refetch: () => fetchData() };
+  return { 
+    data: transformedData, 
+    loading, 
+    error, 
+    refetch: refresh 
+  };
 };
 
 export const useUserPoolData = (userAddress: string | undefined) => {
-  const [data, setData] = useState<UserPoolData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refresh } = useUserPoolsApi(userAddress);
+  
+  // Transform data to match legacy interface
+  const transformedData = (data?.pools || []).map(pool => ({
+    poolId: pool.poolId,
+    poolName: pool.poolId, // Using poolId as name for now
+    contribution: pool.userContribution,
+    earnings: '0', // Calculate based on contribution and APY
+    apy: `${pool.interestRate}%`,
+    totalLiquidity: pool.totalLiquidity
+  }));
 
-  useEffect(() => {
-    if (!userAddress) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await domaLendAPI.getUserPools(userAddress);
-        setData(response.pools || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch user pool data');
-        console.error('Error fetching user pool data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [userAddress]);
-
-  return { data, loading, error, refetch: () => userAddress && fetchData() };
+  return { 
+    data: transformedData, 
+    loading, 
+    error, 
+    refetch: refresh 
+  };
 };
 
 export const usePoolById = (poolId: string | null) => {
-  const [data, setData] = useState<PoolData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refresh } = usePool(poolId || undefined);
+  
+  // Transform data to match legacy interface
+  const transformedData = data ? {
+    poolId: data.pool.poolId,
+    poolName: data.pool.poolId, // Using poolId as name for now
+    totalLiquidity: data.pool.totalLiquidity,
+    availableLiquidity: data.pool.totalLiquidity,
+    apy: `${data.pool.interestRate}%`,
+    minLoanAmount: '0',
+    maxLoanAmount: '1000000',
+    loanToValueRatio: '80%',
+    poolType: (data.pool.poolType || 'custom') as 'instant' | 'custom' | 'crowdfunded',
+    creator: data.pool.creator,
+    loans: (data.loans || []).map(loan => ({
+      loanId: loan.loanId,
+      domainTokenId: loan.domainTokenId,
+      domainName: loan.domainName,
+      borrower: loan.borrowerAddress,
+      amount: loan.loanAmount,
+      status: loan.eventType,
+      createdAt: loan.eventTimestamp
+    }))
+  } : null;
 
-  useEffect(() => {
-    if (!poolId) return;
-
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await domaLendAPI.getPoolById(poolId, true);
-        setData(response.pool);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch pool details');
-        console.error('Error fetching pool details:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [poolId]);
-
-  return { data, loading, error, refetch: () => poolId && fetchData() };
+  return { 
+    data: transformedData, 
+    loading, 
+    error, 
+    refetch: refresh 
+  };
 };

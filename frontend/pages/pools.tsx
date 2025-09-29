@@ -2,6 +2,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePoolData } from '@/hooks/usePoolData';
+import { ApiErrorState } from '@/components/common/api-error-boundary';
+import { GridLoadingState } from '@/components/common/api-loading-state';
 import {
   ArrowUpRight,
   Droplets,
@@ -13,19 +15,12 @@ import { NextPage } from 'next';
 import Link from 'next/link';
 
 const PoolsPage: NextPage = () => {
-  const { data: pools, loading, error } = usePoolData();
+  const { data: pools, loading, error, refetch } = usePoolData();
 
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-64 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
+        <GridLoadingState items={6} columns={3} />
       </div>
     );
   }
@@ -33,11 +28,11 @@ const PoolsPage: NextPage = () => {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-12">
-          <h2 className="text-xl font-semibold mb-2">Error Loading Pools</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()}>Try Again</Button>
-        </div>
+        <ApiErrorState 
+          error={error} 
+          onRetry={refetch}
+          fullHeight={true}
+        />
       </div>
     );
   }
@@ -75,7 +70,10 @@ const PoolsPage: NextPage = () => {
               <div>
                 <p className="text-sm text-gray-600">Total Liquidity</p>
                 <p className="text-2xl font-bold">
-                  ${pools.reduce((acc, pool) => acc + parseFloat(pool.totalLiquidity || '0'), 0).toLocaleString()}
+                  ${pools.reduce((acc, pool) => {
+                    const liquidity = parseFloat(pool.totalLiquidity || '0');
+                    return acc + (isNaN(liquidity) ? 0 : liquidity);
+                  }, 0).toLocaleString()}
                 </p>
               </div>
               <Droplets className="h-8 w-8 text-blue-500" />
@@ -90,7 +88,10 @@ const PoolsPage: NextPage = () => {
                 <p className="text-sm text-gray-600">Avg APY</p>
                 <p className="text-2xl font-bold text-green-600">
                   {pools.length > 0 
-                    ? (pools.reduce((acc, pool) => acc + parseFloat(pool.apy || '0'), 0) / pools.length).toFixed(1)
+                    ? (pools.reduce((acc, pool) => {
+                        const apy = parseFloat(pool.apy?.replace('%', '') || '0');
+                        return acc + (isNaN(apy) ? 0 : apy);
+                      }, 0) / pools.length).toFixed(1)
                     : '0.0'}%
                 </p>
               </div>
@@ -125,9 +126,9 @@ const PoolsPage: NextPage = () => {
                   className={
                     pool.poolType === 'instant' 
                       ? 'bg-green-100 text-green-800'
-                      : pool.poolType === 'custom'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-purple-100 text-purple-800'
+                      : pool.poolType === 'crowdfunded'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-blue-100 text-blue-800'
                   }
                 >
                   {pool.poolType}
@@ -139,15 +140,19 @@ const PoolsPage: NextPage = () => {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">APY</span>
-                    <div className="font-semibold text-green-600">{pool.apy}%</div>
+                    <div className="font-semibold text-green-600">{pool.apy}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Total Liquidity</span>
-                    <div className="font-semibold">${parseInt(pool.totalLiquidity || '0').toLocaleString()}</div>
+                    <div className="font-semibold">
+                      ${(parseInt(pool.totalLiquidity || '0') || 0).toLocaleString()}
+                    </div>
                   </div>
                   <div>
                     <span className="text-gray-600">Available</span>
-                    <div className="font-semibold">${parseInt(pool.availableLiquidity || '0').toLocaleString()}</div>
+                    <div className="font-semibold">
+                      ${(parseInt(pool.availableLiquidity || '0') || 0).toLocaleString()}
+                    </div>
                   </div>
                   <div>
                     <span className="text-gray-600">Active Loans</span>
@@ -156,8 +161,10 @@ const PoolsPage: NextPage = () => {
                 </div>
                 
                 <div className="text-xs text-gray-500">
-                  <div>Loan Range: ${parseInt(pool.minLoanAmount || '0').toLocaleString()} - ${parseInt(pool.maxLoanAmount || '0').toLocaleString()}</div>
-                  <div>LTV Ratio: {pool.loanToValueRatio}%</div>
+                  <div>
+                    Loan Range: ${(parseInt(pool.minLoanAmount || '0') || 0).toLocaleString()} - ${(parseInt(pool.maxLoanAmount || '0') || 0).toLocaleString()}
+                  </div>
+                  <div>LTV Ratio: {pool.loanToValueRatio}</div>
                 </div>
                 
                 <div className="flex gap-2">

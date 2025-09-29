@@ -11,6 +11,9 @@ import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAccount } from 'wagmi';
+import { useUserDomains } from '@/hooks/useDomaLendApi';
+import { ApiErrorState } from '@/components/common/api-error-boundary';
+import { GridLoadingState } from '@/components/common/api-loading-state';
 
 interface DomainNFT {
   tokenId: string;
@@ -39,44 +42,14 @@ interface UserDomainsResponse {
 
 const AddDomainPage: NextPage = () => {
   const router = useRouter();
-  const [userDomains, setUserDomains] = useState<DomainNFT[]>([]);
   const [selectedDomain, setSelectedDomain] = useState<DomainNFT | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<'select' | 'confirm'>('select');
 
   const { address, isConnected } = useAccount();
+  const { data: userDomainsData, loading: isLoading, error, refresh } = useUserDomains(address);
 
-  const fetchUserDomains = async () => {
-    if (!address) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch(`https://backend-doma.kadzu.dev/domains/address/${address}`, {
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch domains');
-      }
-      
-      const data: UserDomainsResponse = await response.json();
-      setUserDomains(data.ownedNFTs || []);
-    } catch (error) {
-      console.error('Error fetching domains:', error);
-      toast.error('Failed to load your domains. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isConnected && address) {
-      fetchUserDomains();
-    }
-  }, [isConnected, address]);
+  const userDomains = userDomainsData?.ownedNFTs || [];
 
   const handleDomainSelect = (domain: DomainNFT) => {
     setSelectedDomain(domain);
@@ -152,11 +125,14 @@ const AddDomainPage: NextPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin" />
-                <span className="ml-2">Loading your domains...</span>
-              </div>
+            {error ? (
+              <ApiErrorState 
+                error={error} 
+                onRetry={refresh}
+                fullHeight={false}
+              />
+            ) : isLoading ? (
+              <GridLoadingState items={3} columns={1} className="py-4" />
             ) : userDomains.length === 0 ? (
               <div className="text-center py-8">
                 <Globe className="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -168,7 +144,7 @@ const AddDomainPage: NextPage = () => {
                 <p className="text-sm text-gray-600 mb-4">
                   Select a domain to submit for scoring:
                 </p>
-                {userDomains.map((domain) => (
+                {userDomains.map((domain: DomainNFT) => (
                   <div
                     key={domain.tokenId}
                     className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -210,7 +186,7 @@ const AddDomainPage: NextPage = () => {
               {userDomains.length > 0 && (
                 <Button
                   type="button"
-                  onClick={fetchUserDomains}
+                  onClick={refresh}
                   disabled={isLoading}
                   variant="outline"
                 >

@@ -172,7 +172,7 @@ class DomaLendAPI {
   
   constructor(baseURL?: string) {
     this.api = axios.create({
-      baseURL: baseURL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001',
+      baseURL: baseURL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'https://backend-doma.kadzu.dev',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -330,7 +330,7 @@ class DomaLendAPI {
     page: number;
     limit: number;
   }> {
-    const response = await this.api.get('http://localhost:3001/auctions', {
+    const response = await this.api.get('/auctions', {
       params: {
         page: 1,
         limit: 20,
@@ -343,7 +343,7 @@ class DomaLendAPI {
   }
 
   async getAuction(auctionId: string): Promise<{ auction: AuctionDetail }> {
-    const response = await this.api.get(`http://localhost:3001/auctions/${auctionId}`);
+    const response = await this.api.get(`/auctions/${auctionId}`);
     return response.data;
   }
 
@@ -393,7 +393,7 @@ class DomaLendAPI {
     page: number;
     limit: number;
   }> {
-    const response = await this.api.get('https://backend-doma.kadzu.dev/pools', {
+    const response = await this.api.get('/pools', {
       params: {
         page: 1,
         limit: 20,
@@ -429,7 +429,7 @@ class DomaLendAPI {
       totalContribution: string;
     };
   }> {
-    const response = await this.api.get(`https://backend-doma.kadzu.dev/pools/user/${userAddress}`);
+    const response = await this.api.get(`/pools/user/${userAddress}`);
     return response.data;
   }
 
