@@ -439,37 +439,30 @@ export class DomainController {
     }));
   }
 
-  private buildLoanObjects(loanEvents: any[]): LoanDto[] {
-    // Group events by loanId and keep the latest event for each loan
-    const loanMap = new Map();
-    
-    loanEvents.forEach(event => {
-      const existingEvent = loanMap.get(event.loanId);
-      
-      // Keep the event with the latest timestamp, or if timestamps are equal, prefer events with aiScore
-      if (!existingEvent || 
-          parseInt(event.eventTimestamp) > parseInt(existingEvent.eventTimestamp) ||
-          (parseInt(event.eventTimestamp) === parseInt(existingEvent.eventTimestamp) && event.aiScore && !existingEvent.aiScore)) {
-        loanMap.set(event.loanId, event);
-      }
+  private buildLoanObjects(loans: any[]): LoanDto[] {
+    // Convert loan records to LoanDto array - these are now from the loan table, not events
+    return loans.map(loan => {
+      const now = Date.now();
+      const deadline = loan.repaymentDeadline ? parseInt(loan.repaymentDeadline) : now + 86400000;
+      const isOverdue = loan.status === 'active' && deadline < now;
+
+      return {
+        loanId: loan.loanId,
+        borrowerAddress: loan.borrowerAddress,
+        domainTokenId: loan.domainTokenId,
+        domainName: loan.domainName,
+        loanAmount: (BigInt(loan.originalAmount || '0') / BigInt(1000000)).toString(), // Convert to USDC format
+        aiScore: loan.aiScore,
+        interestRate: loan.interestRate,
+        status: isOverdue ? 'overdue' : loan.status,
+        eventType: 'loan_record', // This is now a loan record, not an event
+        eventTimestamp: loan.createdAt,
+        repaymentDeadline: loan.repaymentDeadline,
+        poolId: loan.poolId,
+        liquidationAttempted: loan.liquidationAttempted,
+        liquidationTimestamp: loan.liquidationTimestamp
+      };
     });
-    
-    // Convert map values to LoanDto array
-    return Array.from(loanMap.values()).map(event => ({
-      loanId: event.loanId,
-      borrowerAddress: event.borrowerAddress,
-      domainTokenId: event.domainTokenId,
-      domainName: event.domainName,
-      loanAmount: event.loanAmount,
-      aiScore: event.aiScore,
-      interestRate: event.interestRate,
-      eventType: event.eventType,
-      eventTimestamp: event.eventTimestamp,
-      repaymentDeadline: event.repaymentDeadline,
-      poolId: event.poolId,
-      liquidationAttempted: event.liquidationAttempted,
-      liquidationTimestamp: event.liquidationTimestamp
-    }));
   }
 
   private buildScoringEventObjects(scoringEvents: any[]): ScoringEventDto[] {

@@ -43,7 +43,7 @@ export const usePoolData = () => {
     poolId: pool.poolId,
     poolName: pool.poolId, // Using poolId as name for now
     totalLiquidity: pool.totalLiquidity,
-    availableLiquidity: pool.totalLiquidity, // Assuming same for now
+    availableLiquidity: (parseInt(pool.totalLiquidity) - parseInt(pool.totalLoanVolume || '0')).toString(), // Available = Total - Outstanding loans
     apy: `${pool.interestRate}%`,
     minLoanAmount: '0',
     maxLoanAmount: '1000000',
@@ -90,8 +90,8 @@ export const usePoolById = (poolId: string | null) => {
     poolId: data.pool.poolId,
     poolName: data.pool.poolId, // Using poolId as name for now
     totalLiquidity: data.pool.totalLiquidity,
-    availableLiquidity: data.pool.totalLiquidity,
-    apy: `${data.pool.interestRate}%`,
+    availableLiquidity: (parseInt(data.pool.totalLiquidity) - parseInt(data.pool.totalLoanVolume || '0')).toString(),
+    apy: `${(data.pool.interestRate / 100).toFixed(1)}`,
     minLoanAmount: '0',
     maxLoanAmount: '1000000',
     loanToValueRatio: '80%',
@@ -103,7 +103,7 @@ export const usePoolById = (poolId: string | null) => {
       domainName: loan.domainName,
       borrower: loan.borrowerAddress,
       amount: loan.loanAmount,
-      status: loan.eventType,
+      status: loan.status,
       createdAt: loan.eventTimestamp
     }))
   } : null;

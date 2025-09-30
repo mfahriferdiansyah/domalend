@@ -5,10 +5,12 @@ import { DomainResolutionService } from "./services/domain-resolution.service";
 // Wallet imports removed - all contract calls now handled by backend
 import {
   scoringEvent,
-  loanEvent,
+  loan,
+  loanHistory,
   auction,
   auctionHistory,
-  poolEvent,
+  pool,
+  poolHistory,
   loanRequest,
   loanFunding,
   dailyMetrics,
@@ -400,25 +402,48 @@ ponder.on("SatoruLending:InstantLoanExecuted", async ({ event, context }) => {
   try {
     // Resolve domain name for analytics
     const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
     
-    // Record loan event
-    await context.db.insert(loanEvent).values({
-      id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'created_instant',
+    // Insert into main loan table
+    await context.db.insert(loan).values({
+      id: loanId.toString(),
       loanId: loanId.toString(),
       borrowerAddress: borrower,
       domainTokenId: domainTokenId.toString(),
       domainName,
-      loanAmount: loanAmount.toString(),
+      originalAmount: loanAmount.toString(),
+      currentBalance: loanAmount.toString(), // Initially same as original
+      totalRepaid: "0",
+      aiScore: Number(aiScore),
+      interestRate: Number(interestRate),
+      poolId: poolId.toString(),
+      status: 'active',
+      repaymentDeadline: new Date(Number(repaymentDeadline) * 1000),
+      liquidationAttempted: false,
+      liquidationBufferHours: 24,
+      createdAt: timestamp,
+      lastUpdated: timestamp,
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    // Insert into loan history
+    await context.db.insert(loanHistory).values({
+      id: `${event.transaction.hash}-${event.log.logIndex}`,
+      loanId: loanId.toString(),
+      eventType: 'created_instant',
+      borrowerAddress: borrower,
+      domainTokenId: domainTokenId.toString(),
+      domainName,
+      amount: loanAmount.toString(),
+      remainingBalance: loanAmount.toString(),
       aiScore: Number(aiScore),
       interestRate: Number(interestRate),
       poolId: poolId.toString(),
       repaymentDeadline: new Date(Number(repaymentDeadline) * 1000),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp: timestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
-      liquidationAttempted: false,
-      liquidationBufferHours: 0, // Default 24-hour buffer
     });
     
     // Update domain analytics
@@ -443,15 +468,34 @@ ponder.on("SatoruLending:PoolCreated", async ({ event, context }) => {
   console.log(`🏦 [SatoruLending] Pool created: ${poolId} by ${creator} with ${initialLiquidity} liquidity`);
 
   try {
-    await context.db.insert(poolEvent).values({
-      id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'created',
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Insert into main pool table
+    await context.db.insert(pool).values({
+      id: poolId.toString(),
       poolId: poolId.toString(),
       creatorAddress: creator,
+      totalLiquidity: initialLiquidity.toString(),
+      minAiScore: Number(minAiScore),
+      interestRate: Number(interestRate),
+      participantCount: 1,
+      status: 'active',
+      createdAt: timestamp,
+      lastUpdated: timestamp,
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    // Insert into pool history
+    await context.db.insert(poolHistory).values({
+      id: `${event.transaction.hash}-${event.log.logIndex}`,
+      poolId: poolId.toString(),
+      eventType: 'created',
+      providerAddress: creator,
       liquidityAmount: initialLiquidity.toString(),
       minAiScore: Number(minAiScore),
       interestRate: Number(interestRate),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp: timestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
@@ -468,14 +512,27 @@ ponder.on("SatoruLending:LiquidityAdded", async ({ event, context }) => {
   console.log(`💰 [SatoruLending] Liquidity added: ${amount} to pool ${poolId} by ${provider}`);
 
   try {
-    await context.db.insert(poolEvent).values({
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Update pool state
+    const existingPool = await context.db.find(pool, { id: poolId.toString() });
+    if (existingPool) {
+      const newTotalLiquidity = (BigInt(existingPool.totalLiquidity) + amount).toString();
+      await context.db.update(pool, { id: poolId.toString() })
+        .set({
+          totalLiquidity: newTotalLiquidity,
+          lastUpdated: timestamp,
+        });
+    }
+
+    // Insert into pool history
+    await context.db.insert(poolHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'liquidity_added',
       poolId: poolId.toString(),
-      creatorAddress: provider,
+      eventType: 'liquidity_added',
       providerAddress: provider,
       liquidityAmount: amount.toString(),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp: timestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
@@ -492,14 +549,27 @@ ponder.on("SatoruLending:LiquidityRemoved", async ({ event, context }) => {
   console.log(`💸 [SatoruLending] Liquidity removed: ${amount} from pool ${poolId} by ${provider}`);
 
   try {
-    await context.db.insert(poolEvent).values({
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Update pool state
+    const existingPool = await context.db.find(pool, { id: poolId.toString() });
+    if (existingPool) {
+      const newTotalLiquidity = (BigInt(existingPool.totalLiquidity) - amount).toString();
+      await context.db.update(pool, { id: poolId.toString() })
+        .set({
+          totalLiquidity: newTotalLiquidity,
+          lastUpdated: timestamp,
+        });
+    }
+
+    // Insert into pool history
+    await context.db.insert(poolHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'liquidity_removed',
       poolId: poolId.toString(),
-      creatorAddress: provider,
+      eventType: 'liquidity_removed',
       providerAddress: provider,
       liquidityAmount: amount.toString(),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp: timestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
@@ -624,27 +694,42 @@ ponder.on("LoanManager:LoanRepaid", async ({ event, context }) => {
   console.log(`💰 [LoanManager] Loan repaid: ${loanId} by ${borrower} (${repaymentAmount})`);
 
   try {
-    // Find the original loan to get domain information
-    // Use SQL query to find the original loan with specific conditions
-    // Find the original loan using new Ponder SQL API
-    const allLoans = await context.db.sql.select().from(loanEvent);
-    const originalLoan = allLoans.find?.((loan: any) =>
-      loan.loanId === loanId.toString() && loan.eventType === 'created_instant'
-    ) || null;
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
 
-    await context.db.insert(loanEvent).values({
-      id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: isFullyRepaid ? 'repaid_full' : 'repaid_partial',
-      loanId: loanId.toString(),
-      borrowerAddress: borrower,
-      domainTokenId: originalLoan?.domainTokenId || '',
-      domainName: originalLoan?.domainName || '',
-      loanAmount: repaymentAmount.toString(),
-      aiScore: originalLoan?.aiScore,
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
-      blockNumber: event.block.number,
-      transactionHash: event.transaction.hash,
-    });
+    // Get the existing loan
+    const existingLoan = await context.db.find(loan, { id: loanId.toString() });
+    if (existingLoan) {
+      const newBalance = isFullyRepaid ? "0" : 
+        (BigInt(existingLoan.currentBalance) - repaymentAmount).toString();
+      const newTotalRepaid = (BigInt(existingLoan.totalRepaid) + repaymentAmount).toString();
+
+      // Update loan state
+      await context.db.update(loan, { id: loanId.toString() })
+        .set({
+          currentBalance: newBalance,
+          totalRepaid: newTotalRepaid,
+          status: isFullyRepaid ? 'repaid' : 'active',
+          lastUpdated: timestamp,
+        });
+
+      // Insert into loan history
+      await context.db.insert(loanHistory).values({
+        id: `${event.transaction.hash}-${event.log.logIndex}`,
+        loanId: loanId.toString(),
+        eventType: isFullyRepaid ? 'repaid_full' : 'repaid_partial',
+        borrowerAddress: borrower,
+        domainTokenId: existingLoan.domainTokenId,
+        domainName: existingLoan.domainName,
+        amount: repaymentAmount.toString(),
+        remainingBalance: newBalance,
+        aiScore: existingLoan.aiScore,
+        interestRate: existingLoan.interestRate,
+        poolId: existingLoan.poolId,
+        eventTimestamp: timestamp,
+        blockNumber: event.block.number,
+        transactionHash: event.transaction.hash,
+      });
+    }
 
     console.log(`✅ [LoanManager] Loan repayment recorded for loan ${loanId}`);
   } catch (error) {
@@ -665,11 +750,8 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
   console.log(`🏛️ [DutchAuction] Auction started: ${auctionId} for loan ${loanId} (domain: ${domainTokenId})`);
 
   try {
-    // Find the original loan to get additional data (if needed)
-    const allLoans = await context.db.sql.select().from(loanEvent);
-    const originalLoan = allLoans.find?.((loan: any) =>
-      loan.loanId === loanId.toString() && loan.eventType === 'created_instant'
-    ) || null;
+    // Find the original loan to get additional data
+    const existingLoan = await context.db.find(loan, { id: loanId.toString() });
 
     // Always resolve domain name from tokenId, ignore event data completely
     const resolvedDomainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
@@ -682,9 +764,9 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
       auctionId: auctionId.toString(),
       loanId: loanId.toString(),
       domainTokenId: domainTokenId.toString(),
-      domainName: resolvedDomainName,
-      borrowerAddress: borrower,
-      aiScore: aiScore.toString(),
+      domainName,
+      borrowerAddress: existingLoan?.borrowerAddress,
+      aiScore: existingLoan?.aiScore,
       startingPrice: startingPrice.toString(),
       currentPrice: startingPrice.toString(),
       status: 'active',
@@ -842,25 +924,48 @@ ponder.on("LoanManager:LoanCreated", async ({ event, context }) => {
   try {
     // Resolve domain name
     const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+    const timestamp = new Date(Number(event.block.timestamp) * 1000);
 
-    // Record loan creation event
-    await context.db.insert(loanEvent).values({
-      id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: requestId && requestId > 0n ? 'created_crowdfunded' : 'created_instant',
+    // Insert into main loan table
+    await context.db.insert(loan).values({
+      id: loanId.toString(),
       loanId: loanId.toString(),
       requestId: requestId ? requestId.toString() : undefined,
       borrowerAddress: borrower,
       domainTokenId: domainTokenId.toString(),
       domainName,
-      loanAmount: principalAmount.toString(),
+      originalAmount: principalAmount.toString(),
+      currentBalance: principalAmount.toString(),
+      totalRepaid: "0",
+      interestRate: Number(interestRate),
+      poolId: poolId ? poolId.toString() : undefined,
+      status: 'active',
+      repaymentDeadline: new Date(Number(dueDate) * 1000),
+      liquidationAttempted: false,
+      liquidationBufferHours: 24,
+      createdAt: timestamp,
+      lastUpdated: timestamp,
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    // Insert into loan history
+    await context.db.insert(loanHistory).values({
+      id: `${event.transaction.hash}-${event.log.logIndex}`,
+      loanId: loanId.toString(),
+      eventType: requestId && requestId > 0n ? 'created_crowdfunded' : 'created_instant',
+      requestId: requestId ? requestId.toString() : undefined,
+      borrowerAddress: borrower,
+      domainTokenId: domainTokenId.toString(),
+      domainName,
+      amount: principalAmount.toString(),
+      remainingBalance: principalAmount.toString(),
       interestRate: Number(interestRate),
       poolId: poolId ? poolId.toString() : undefined,
       repaymentDeadline: new Date(Number(dueDate) * 1000),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp: timestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
-      liquidationAttempted: false,
-      liquidationBufferHours: 0,
     });
 
     console.log(`✅ [LoanManager] Loan creation recorded for ${loanId}`);
@@ -875,23 +980,21 @@ ponder.on("LoanManager:CollateralLocked", async ({ event, context }) => {
   console.log(`🔒 [LoanManager] Collateral locked: loan ${loanId}, domain ${domainTokenId}`);
 
   try {
-    // Find the loan to update using new Ponder SQL API
-    const allLoans = await context.db.sql.select().from(loanEvent);
-    const loan = allLoans.find?.((l: any) =>
-      l.loanId === loanId.toString() && (l.eventType === 'created_instant' || l.eventType === 'created_crowdfunded')
-    );
+    // Find the existing loan
+    const existingLoan = await context.db.find(loan, { id: loanId.toString() });
 
-    if (loan) {
+    if (existingLoan) {
       // Record collateral lock event
-      await context.db.insert(loanEvent).values({
+      await context.db.insert(loanHistory).values({
         id: `${event.transaction.hash}-${event.log.logIndex}`,
         eventType: 'collateral_locked',
         loanId: loanId.toString(),
         borrowerAddress: borrower,
         domainTokenId: domainTokenId.toString(),
-        domainName: loan.domainName,
-        loanAmount: loan.loanAmount,
-        aiScore: loan.aiScore,
+        domainName: existingLoan.domainName,
+        amount: '0', // No amount for lock event
+        remainingBalance: existingLoan.currentBalance,
+        aiScore: existingLoan.aiScore,
         eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
         blockNumber: event.block.number,
         transactionHash: event.transaction.hash,
@@ -911,22 +1014,19 @@ ponder.on("LoanManager:CollateralReleased", async ({ event, context }) => {
 
   try {
     // Find the original loan using new Ponder SQL API
-    const allLoans = await context.db.sql.select().from(loanEvent);
-    const originalLoan = allLoans.find?.((l: any) =>
-      l.loanId === loanId.toString() && (l.eventType === 'created_instant' || l.eventType === 'created_crowdfunded')
-    );
-
-    if (originalLoan) {
+    const existingLoan = await context.db.find(loan, { id: loanId.toString() });
+    if (existingLoan) {
       // Record collateral release event
-      await context.db.insert(loanEvent).values({
+      await context.db.insert(loanHistory).values({
         id: `${event.transaction.hash}-${event.log.logIndex}`,
         eventType: 'collateral_released',
         loanId: loanId.toString(),
         borrowerAddress: borrower,
         domainTokenId: domainTokenId.toString(),
-        domainName: originalLoan.domainName,
-        loanAmount: originalLoan.loanAmount,
-        aiScore: originalLoan.aiScore,
+        domainName: existingLoan.domainName,
+        amount: existingLoan.originalAmount,
+        remainingBalance: existingLoan.currentBalance,
+        aiScore: existingLoan.aiScore,
         eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
         blockNumber: event.block.number,
         transactionHash: event.transaction.hash,
@@ -946,28 +1046,35 @@ ponder.on("LoanManager:CollateralLiquidated", async ({ event, context }) => {
 
   try {
     // Find the original loan using new Ponder SQL API
-    const allLoans = await context.db.sql.select().from(loanEvent);
-    const originalLoan = allLoans.find?.((l: any) =>
-      l.loanId === loanId.toString() && (l.eventType === 'created_instant' || l.eventType === 'created_crowdfunded')
-    );
+    const existingLoan = await context.db.find(loan, { id: loanId.toString() });
 
-    // Record liquidation event
-    await context.db.insert(loanEvent).values({
-      id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'liquidated',
-      loanId: loanId.toString(),
-      borrowerAddress: borrower,
-      domainTokenId: domainTokenId.toString(),
-      domainName: originalLoan?.domainName || `domain-${domainTokenId}`,
-      loanAmount: loanAmount.toString(),
-      aiScore: originalLoan?.aiScore,
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
-      blockNumber: event.block.number,
-      transactionHash: event.transaction.hash,
-      liquidationAttempted: true,
-      liquidationTxHash: event.transaction.hash,
-      liquidationTimestamp: new Date(Number(event.block.timestamp) * 1000),
-    });
+    if (existingLoan) {
+      // Update loan status to liquidated
+      await context.db.update(loan, { id: loanId.toString() })
+        .set({
+          status: 'liquidated',
+          liquidationAttempted: true,
+          liquidationTimestamp: new Date(Number(event.block.timestamp) * 1000),
+          lastUpdated: new Date(Number(event.block.timestamp) * 1000),
+        });
+
+      // Record liquidation event
+      await context.db.insert(loanHistory).values({
+        id: `${event.transaction.hash}-${event.log.logIndex}`,
+        eventType: 'liquidated',
+        loanId: loanId.toString(),
+        borrowerAddress: borrower,
+        domainTokenId: domainTokenId.toString(),
+        domainName: existingLoan.domainName,
+        amount: loanAmount.toString(),
+        remainingBalance: existingLoan.currentBalance,
+        aiScore: existingLoan.aiScore,
+        liquidationTxHash: event.transaction.hash,
+        eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+        blockNumber: event.block.number,
+        transactionHash: event.transaction.hash,
+      });
+    }
 
     console.log(`✅ [LoanManager] Collateral liquidation recorded for loan ${loanId}`);
   } catch (error) {
@@ -1102,14 +1209,24 @@ ponder.on("SatoruLending:PoolUpdated", async ({ event, context }) => {
   console.log(`🔧 [SatoruLending] Pool updated: ${poolId} by ${updatedBy}`);
 
   try {
-    await context.db.insert(poolEvent).values({
+    const eventTimestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Update pool state
+    await context.db.update(pool, { id: poolId.toString() })
+      .set({
+        minAiScore: Number(newMinAiScore),
+        interestRate: Number(newInterestRate),
+        lastUpdated: eventTimestamp,
+      });
+
+    // Insert into pool history
+    await context.db.insert(poolHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      eventType: 'updated',
       poolId: poolId.toString(),
-      creatorAddress: updatedBy,
+      eventType: 'updated',
       minAiScore: Number(newMinAiScore),
       interestRate: Number(newInterestRate),
-      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      eventTimestamp,
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });

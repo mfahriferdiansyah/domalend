@@ -1,8 +1,46 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig } from 'wagmi';
 import { useState, useCallback } from 'react';
-import { parseEther, formatEther, Address } from 'viem';
+import { parseEther, formatEther, Address, parseUnits, maxUint256 } from 'viem';
+import { readContract, simulateContract } from '@wagmi/core';
 
 // Contract ABIs - These would be imported from your ABIs folder
+const ERC20_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: 'success', type: 'bool' }]
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ name: 'amount', type: 'uint256' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }]
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: 'decimals', type: 'uint8' }]
+  }
+] as const;
+
 const SATORU_LENDING_ABI = [
   {
     name: 'requestInstantLoan',
@@ -31,11 +69,74 @@ const SATORU_LENDING_ABI = [
   {
     name: 'addLiquidity',
     type: 'function',
-    stateMutability: 'payable',
+    stateMutability: 'nonpayable',
     inputs: [
-      { name: 'poolId', type: 'uint256' }
+      { name: 'poolId', type: 'uint256' },
+      { name: 'amount', type: 'uint256' }
     ],
     outputs: [{ name: 'success', type: 'bool' }]
+  },
+  {
+    name: 'removeLiquidity',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'poolId', type: 'uint256' },
+      { name: 'sharePercentage', type: 'uint256' }
+    ],
+    outputs: [{ name: 'success', type: 'bool' }]
+  },
+  {
+    name: 'createLoanRequest',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'domainTokenId', type: 'uint256' },
+          { name: 'requestedAmount', type: 'uint256' },
+          { name: 'proposedInterestRate', type: 'uint256' },
+          { name: 'campaignDuration', type: 'uint256' },
+          { name: 'repaymentDeadline', type: 'uint256' }
+        ]
+      }
+    ],
+    outputs: [{ name: 'requestId', type: 'uint256' }]
+  },
+  {
+    name: 'fundLoanRequest',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'requestId', type: 'uint256' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: 'success', type: 'bool' }]
+  },
+  {
+    name: 'cancelLoanRequest',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'requestId', type: 'uint256' }
+    ],
+    outputs: [{ name: 'success', type: 'bool' }]
+  },
+  {
+    name: 'canGetInstantLoan',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'domainTokenId', type: 'uint256' },
+      { name: 'poolId', type: 'uint256' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [
+      { name: 'eligible', type: 'bool' },
+      { name: 'reason', type: 'string' }
+    ]
   },
   {
     name: 'getPool',
@@ -166,10 +267,10 @@ const AI_ORACLE_ABI = [
 
 // Contract addresses - these would be from your deployment
 const CONTRACT_ADDRESSES = {
-  SATORU_LENDING: '0xc8b37c973976e06A99D7B259b11dEF258d9e067F' as Address,
-  LOAN_MANAGER: '0x531cB6aB00A03CE568f082cC636eBE8D0C2eC0C3' as Address,
-  DUTCH_AUCTION: '0xb22Eb9772966037D8cF6D094839Cc83164c30985' as Address,
-  AI_ORACLE: '0xd0669621a9621E9F4f55721A60Abf2d0328CdffD' as Address,
+  SATORU_LENDING: '0x76435A7eE4d2c1AB98D75e6b8927844aF1Fb2F2B' as Address,
+  LOAN_MANAGER: '0x5365E0cf54Bccc157A0eFBb3aC77F826E27f9A49' as Address,
+  DUTCH_AUCTION: '0xF4eC2e259036A841D7ebd8A34fDC97311Be063d1' as Address,
+  AI_ORACLE: '0x43f0Ce9B2209D7F041525Af40f365a2B22DF53a1' as Address,
   DOMA_PROTOCOL: '0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f' as Address,
   USDC: '0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B' as Address
 } as const;
@@ -212,11 +313,94 @@ export interface Auction {
 export function useDomaLend() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const config = useConfig();
   
   const { writeContractAsync: writeSatoruLending } = useWriteContract();
   const { writeContractAsync: writeLoanManager } = useWriteContract();
   const { writeContractAsync: writeDutchAuction } = useWriteContract();
   const { writeContractAsync: writeAIOracle } = useWriteContract();
+  const { writeContractAsync: writeERC20 } = useWriteContract();
+
+  // Helper function for transaction simulation
+  const simulateTransaction = useCallback(async (contractConfig: any) => {
+    try {
+      const simulation = await simulateContract(config, contractConfig);
+      return { success: true, simulation };
+    } catch (err: any) {
+      console.error('Transaction simulation failed:', err);
+      
+      // Extract meaningful error message
+      let errorMessage = 'Transaction would fail';
+      if (err.message) {
+        if (err.message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds for transaction';
+        } else if (err.message.includes('allowance')) {
+          errorMessage = 'Insufficient token allowance';
+        } else if (err.message.includes('revert')) {
+          const revertMatch = err.message.match(/revert (.+?)(?:\n|$)/);
+          if (revertMatch) {
+            errorMessage = `Contract error: ${revertMatch[1]}`;
+          }
+        } else {
+          errorMessage = `Transaction simulation failed: ${err.message}`;
+        }
+      }
+      
+      return { success: false, error: errorMessage };
+    }
+  }, [config]);
+
+  // USDC Helper Functions
+  const approveUSDC = useCallback(async (spender: Address, amount: bigint) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Simulate the approval first
+      const simulationConfig = {
+        address: CONTRACT_ADDRESSES.USDC,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [spender, amount]
+      };
+
+      const simulationResult = await simulateTransaction(simulationConfig);
+      if (!simulationResult.success) {
+        throw new Error(simulationResult.error);
+      }
+
+      const hash = await writeERC20({
+        address: CONTRACT_ADDRESSES.USDC,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [spender, amount]
+      });
+      
+      return { success: true, hash };
+    } catch (err: any) {
+      const message = err.message || 'Failed to approve USDC';
+      setError(message);
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [writeERC20, simulateTransaction]);
+
+  const checkUSDCAllowance = useCallback(async (owner: Address, spender: Address): Promise<bigint> => {
+    try {
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESSES.USDC,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [owner, spender]
+      });
+      
+      return result as bigint;
+    } catch (err) {
+      console.warn('Failed to check USDC allowance, assuming 0:', err);
+      return BigInt(0);
+    }
+  }, [config]);
 
   // Loan Operations
   const requestLoan = useCallback(async (
@@ -229,16 +413,31 @@ export function useDomaLend() {
     setError(null);
     
     try {
+      const args = [
+        BigInt(domainTokenId),
+        parseUnits(requestedAmount, 6), // Using USDC decimals
+        BigInt(term),
+        poolId ? BigInt(poolId) : BigInt(0)
+      ];
+
+      // Simulate the transaction first
+      const simulationConfig = {
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'requestInstantLoan',
+        args
+      };
+
+      const simulationResult = await simulateTransaction(simulationConfig);
+      if (!simulationResult.success) {
+        throw new Error(simulationResult.error);
+      }
+
       const hash = await writeSatoruLending({
         address: CONTRACT_ADDRESSES.SATORU_LENDING,
         abi: SATORU_LENDING_ABI,
         functionName: 'requestInstantLoan',
-        args: [
-          BigInt(domainTokenId),
-          parseEther(requestedAmount),
-          BigInt(term),
-          poolId ? BigInt(poolId) : BigInt(0)
-        ]
+        args
       });
       
       return { success: true, hash };
@@ -249,7 +448,7 @@ export function useDomaLend() {
     } finally {
       setIsLoading(false);
     }
-  }, [writeSatoruLending]);
+  }, [writeSatoruLending, simulateTransaction]);
 
   const repayLoan = useCallback(async (loanId: string, amount: string) => {
     setIsLoading(true);
@@ -285,6 +484,19 @@ export function useDomaLend() {
     setError(null);
     
     try {
+      // Simulate the transaction first
+      const simulationConfig = {
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'createLiquidityPool',
+        args: [name, BigInt(minScore), BigInt(maxLTV), BigInt(interestRate)]
+      };
+
+      const simulationResult = await simulateTransaction(simulationConfig);
+      if (!simulationResult.success) {
+        throw new Error(simulationResult.error);
+      }
+
       const hash = await writeSatoruLending({
         address: CONTRACT_ADDRESSES.SATORU_LENDING,
         abi: SATORU_LENDING_ABI,
@@ -300,19 +512,63 @@ export function useDomaLend() {
     } finally {
       setIsLoading(false);
     }
-  }, [writeSatoruLending]);
+  }, [writeSatoruLending, simulateTransaction]);
 
-  const addLiquidity = useCallback(async (poolId: string, amount: string) => {
+  const addLiquidity = useCallback(async (poolId: string, amount: string, userAddress: Address, skipApprovalCheck = false): Promise<any> => {
     setIsLoading(true);
     setError(null);
     
     try {
+      const amountBigInt = parseUnits(amount, 6); // USDC has 6 decimals
+      
+      // Check current allowance (skip if this is a follow-up call after approval)
+      if (!skipApprovalCheck) {
+        const currentAllowance = await checkUSDCAllowance(userAddress, CONTRACT_ADDRESSES.SATORU_LENDING);
+        
+        // If allowance is insufficient, request approval and then continue
+        if (currentAllowance < amountBigInt) {
+          const approvalResult = await approveUSDC(CONTRACT_ADDRESSES.SATORU_LENDING, maxUint256);
+          if (!approvalResult.success) {
+            return approvalResult;
+          }
+          
+          // Wait for approval transaction to be confirmed
+          setIsLoading(true); // Keep loading state
+          
+          // Recursively call addLiquidity after approval, skipping allowance check
+          const liquidityResult: any = await addLiquidity(poolId, amount, userAddress, true);
+          
+          return {
+            success: liquidityResult.success,
+            hash: liquidityResult.hash,
+            approvalHash: approvalResult.hash,
+            message: liquidityResult.success 
+              ? 'USDC approved and liquidity added successfully!'
+              : 'USDC approved but liquidity addition failed. Please try again.',
+            error: liquidityResult.error
+          };
+        }
+      }
+
+      // Simulate the transaction first
+      const simulationConfig = {
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'addLiquidity',
+        args: [BigInt(poolId), amountBigInt]
+      };
+
+      const simulationResult = await simulateTransaction(simulationConfig);
+      if (!simulationResult.success) {
+        throw new Error(simulationResult.error);
+      }
+
+      // Execute the actual transaction
       const hash = await writeSatoruLending({
         address: CONTRACT_ADDRESSES.SATORU_LENDING,
         abi: SATORU_LENDING_ABI,
         functionName: 'addLiquidity',
-        args: [BigInt(poolId)],
-        value: parseEther(amount)
+        args: [BigInt(poolId), amountBigInt]
       });
       
       return { success: true, hash };
@@ -323,7 +579,7 @@ export function useDomaLend() {
     } finally {
       setIsLoading(false);
     }
-  }, [writeSatoruLending]);
+  }, [writeSatoruLending, approveUSDC, checkUSDCAllowance, simulateTransaction]);
 
   // Auction Operations
   const placeBid = useCallback(async (auctionId: string, bidAmount: string) => {
@@ -394,10 +650,160 @@ export function useDomaLend() {
     }
   }, [writeAIOracle]);
 
+  // Additional Pool Operations
+  const removeLiquidity = useCallback(async (poolId: string, sharePercentage: number) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const hash = await writeSatoruLending({
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'removeLiquidity',
+        args: [BigInt(poolId), BigInt(sharePercentage)]
+      });
+      
+      return { success: true, hash };
+    } catch (err: any) {
+      const message = err.message || 'Failed to remove liquidity';
+      setError(message);
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [writeSatoruLending, simulateTransaction]);
+
+  // Loan Request Operations
+  const createLoanRequest = useCallback(async (
+    domainTokenId: string,
+    requestedAmount: string,
+    proposedInterestRate: number,
+    campaignDuration: number,
+    repaymentDeadline: number
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const hash = await writeSatoruLending({
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'createLoanRequest',
+        args: [{
+          domainTokenId: BigInt(domainTokenId),
+          requestedAmount: parseEther(requestedAmount),
+          proposedInterestRate: BigInt(proposedInterestRate),
+          campaignDuration: BigInt(campaignDuration),
+          repaymentDeadline: BigInt(repaymentDeadline)
+        }]
+      });
+      
+      return { success: true, hash };
+    } catch (err: any) {
+      const message = err.message || 'Failed to create loan request';
+      setError(message);
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [writeSatoruLending, simulateTransaction]);
+
+  const fundLoanRequest = useCallback(async (requestId: string, amount: string, userAddress: Address, skipApprovalCheck = false): Promise<any> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const amountBigInt = parseUnits(amount, 6); // USDC has 6 decimals
+      
+      // Check current allowance (skip if this is a follow-up call after approval)
+      if (!skipApprovalCheck) {
+        const currentAllowance = await checkUSDCAllowance(userAddress, CONTRACT_ADDRESSES.SATORU_LENDING);
+        
+        // If allowance is insufficient, request approval and then continue
+        if (currentAllowance < amountBigInt) {
+          const approvalResult = await approveUSDC(CONTRACT_ADDRESSES.SATORU_LENDING, maxUint256);
+          if (!approvalResult.success) {
+            return approvalResult;
+          }
+          
+          // Wait for approval transaction to be confirmed
+          setIsLoading(true); // Keep loading state
+          
+          // Recursively call fundLoanRequest after approval, skipping allowance check
+          const fundingResult: any = await fundLoanRequest(requestId, amount, userAddress, true);
+          
+          return {
+            success: fundingResult.success,
+            hash: fundingResult.hash,
+            approvalHash: approvalResult.hash,
+            message: fundingResult.success 
+              ? 'USDC approved and loan funded successfully!'
+              : 'USDC approved but loan funding failed. Please try again.',
+            error: fundingResult.error
+          };
+        }
+      }
+
+      // Simulate the transaction first
+      const simulationConfig = {
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'fundLoanRequest',
+        args: [BigInt(requestId), amountBigInt]
+      };
+
+      const simulationResult = await simulateTransaction(simulationConfig);
+      if (!simulationResult.success) {
+        throw new Error(simulationResult.error);
+      }
+
+      const hash = await writeSatoruLending({
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'fundLoanRequest',
+        args: [BigInt(requestId), amountBigInt]
+      });
+      
+      return { success: true, hash };
+    } catch (err: any) {
+      const message = err.message || 'Failed to fund loan request';
+      setError(message);
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [writeSatoruLending, approveUSDC, checkUSDCAllowance, simulateTransaction]);
+
+  const cancelLoanRequest = useCallback(async (requestId: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const hash = await writeSatoruLending({
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        abi: SATORU_LENDING_ABI,
+        functionName: 'cancelLoanRequest',
+        args: [BigInt(requestId)]
+      });
+      
+      return { success: true, hash };
+    } catch (err: any) {
+      const message = err.message || 'Failed to cancel loan request';
+      setError(message);
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [writeSatoruLending, simulateTransaction]);
+
   return {
     // State
     isLoading,
     error,
+    
+    // USDC functions
+    approveUSDC,
+    checkUSDCAllowance,
     
     // Loan functions
     requestLoan,
@@ -407,6 +813,12 @@ export function useDomaLend() {
     // Pool functions
     createPool,
     addLiquidity,
+    removeLiquidity,
+    
+    // Loan request functions
+    createLoanRequest,
+    fundLoanRequest,
+    cancelLoanRequest,
     
     // Auction functions
     placeBid,
@@ -488,6 +900,36 @@ export function useAuction(auctionId: string | undefined) {
   };
 }
 
+// Hook for checking instant loan eligibility
+export function useInstantLoanEligibility(
+  domainTokenId: string | undefined,
+  poolId: string | undefined,
+  amount: string | undefined
+) {
+  const { data, isLoading, error } = useReadContract({
+    address: CONTRACT_ADDRESSES.SATORU_LENDING,
+    abi: SATORU_LENDING_ABI,
+    functionName: 'canGetInstantLoan',
+    args: domainTokenId && poolId && amount ? [
+      BigInt(domainTokenId),
+      BigInt(poolId),
+      parseEther(amount)
+    ] : undefined,
+    query: {
+      enabled: !!(domainTokenId && poolId && amount)
+    }
+  });
+
+  const [eligible, reason] = data as [boolean, string] || [false, ''];
+
+  return {
+    eligible,
+    reason,
+    isLoading,
+    error
+  };
+}
+
 // Hook for reading domain score
 export function useDomainScore(domainTokenId: string | undefined) {
   const { data, isLoading, error } = useReadContract({
@@ -505,6 +947,44 @@ export function useDomainScore(domainTokenId: string | undefined) {
   return {
     score: Number(score),
     timestamp: Number(timestamp),
+    isLoading,
+    error
+  };
+}
+
+// Hook for reading USDC allowance
+export function useUSDCAllowance(owner: Address | undefined, spender: Address) {
+  const { data: allowance, isLoading, error } = useReadContract({
+    address: CONTRACT_ADDRESSES.USDC,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: owner ? [owner, spender] : undefined,
+    query: {
+      enabled: !!owner
+    }
+  });
+
+  return {
+    allowance: allowance as bigint || BigInt(0),
+    isLoading,
+    error
+  };
+}
+
+// Hook for reading USDC balance
+export function useUSDCBalance(account: Address | undefined) {
+  const { data: balance, isLoading, error } = useReadContract({
+    address: CONTRACT_ADDRESSES.USDC,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: account ? [account] : undefined,
+    query: {
+      enabled: !!account
+    }
+  });
+
+  return {
+    balance: balance as bigint || BigInt(0),
     isLoading,
     error
   };

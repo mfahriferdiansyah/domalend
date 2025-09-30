@@ -92,7 +92,7 @@ export class LoanDto {
 
   @ApiProperty({
     description: 'Domain information',
-    type: LoanDomainDto
+    type: () => LoanDomainDto
   })
   domain: LoanDomainDto;
 
@@ -302,7 +302,7 @@ export class GetLoansResponseDto {
 
   @ApiProperty({
     description: 'Context-aware summary',
-    type: LoanSummaryDto
+    type: () => LoanSummaryDto
   })
   summary: LoanSummaryDto;
 }

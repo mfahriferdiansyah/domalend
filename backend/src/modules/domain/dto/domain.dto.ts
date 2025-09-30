@@ -61,7 +61,7 @@ export class DomaNFTDto {
 
   @ApiProperty({
     description: 'NFT attributes',
-    type: [DomaNFTAttributeDto],
+    type: () => [DomaNFTAttributeDto],
   })
   attributes: DomaNFTAttributeDto[];
 
@@ -109,7 +109,7 @@ export class AddressNFTBalanceDto {
 
   @ApiProperty({
     description: 'List of NFTs owned by the address from Doma contract',
-    type: [DomaNFTDto],
+    type: () => [DomaNFTDto],
   })
   ownedNFTs: DomaNFTDto[];
 
@@ -136,7 +136,7 @@ export class NFTDetailsResponseDto {
 
   @ApiProperty({
     description: 'NFT details if exists',
-    type: DomaNFTDto,
+    type: () => DomaNFTDto,
     required: false,
   })
   nft?: DomaNFTDto;
@@ -275,21 +275,21 @@ export class DomainLoanHistoryDto {
 export class EnhancedDomainDto extends DomaNFTDto {
   @ApiProperty({
     description: 'Current active loan details',
-    type: DomainLoanStatusDto,
+    type: () => DomainLoanStatusDto,
     required: false
   })
   currentLoan?: DomainLoanStatusDto;
 
   @ApiProperty({
     description: 'AI scoring details',
-    type: DomainAiScoreDto,
+    type: () => DomainAiScoreDto,
     required: false
   })
   aiScore?: DomainAiScoreDto;
 
   @ApiProperty({
     description: 'Loan history for this domain',
-    type: DomainLoanHistoryDto
+    type: () => DomainLoanHistoryDto
   })
   loanHistory: DomainLoanHistoryDto;
 }
@@ -348,13 +348,13 @@ export class GetUserDomainsResponseDto {
 
   @ApiProperty({
     description: 'Enhanced domain list with loan and scoring data',
-    type: [EnhancedDomainDto]
+    type: () => [EnhancedDomainDto]
   })
   domains: EnhancedDomainDto[];
 
   @ApiProperty({
     description: 'Portfolio summary and analytics',
-    type: DomainPortfolioSummaryDto
+    type: () => DomainPortfolioSummaryDto
   })
   portfolio: DomainPortfolioSummaryDto;
 }

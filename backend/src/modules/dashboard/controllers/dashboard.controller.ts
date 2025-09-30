@@ -15,15 +15,20 @@ import {
 import { ethers } from 'ethers';
 
 import { IndexerService } from '../../indexer/indexer.service';
+import { DomaNftService } from '../../domain/services/doma-nft.service';
+import { DomainScoreCacheService } from '../../domain/services/domain-score-cache.service';
 import {
   UserDashboardDto,
   GetUserDashboardResponseDto,
   DashboardStatsDto,
   ActiveLoanDto,
+  UserLoanDto,
   LiquidityPositionDto,
   AuctionOpportunityDto,
-  RecentActivityDto
+  RecentActivityDto,
+  DomainNFTDto
 } from '../dto/dashboard.dto';
+import { EnhancedDomainDto } from '../../domain/dto/domain.dto';
 
 @ApiTags('dashboard')
 @Controller('dashboard')
@@ -31,7 +36,9 @@ export class DashboardController {
   private readonly logger = new Logger(DashboardController.name);
 
   constructor(
-    private readonly indexerService: IndexerService
+    private readonly indexerService: IndexerService,
+    private readonly domaNftService: DomaNftService,
+    private readonly domainScoreCacheService: DomainScoreCacheService
   ) {}
 
   @Get('user/:address')
@@ -62,23 +69,33 @@ export class DashboardController {
       // Get all user data from indexer
       const dashboardData = await this.indexerService.queryUserDashboardData(address);
 
+      // Get user domains/NFTs from Doma contract
+      const userDomainsData = await this.domaNftService.getNFTBalanceForAddress(address);
+
+      // Get user scored domains with enhanced data
+      const userScoredDomains = await this.buildScoredDomains(userDomainsData.ownedNFTs || []);
+
       // Build dashboard components
       const stats = await this.buildDashboardStats(dashboardData, address);
-      const activeLoans = this.buildActiveLoans(dashboardData.userLoans?.items || []);
-      const liquidityPositions = this.buildLiquidityPositions(dashboardData.userPoolEvents?.items || []);
+      const userLoans = this.buildUserLoans(dashboardData.userLoans?.items || []);
+      const liquidityPositions = this.buildLiquidityPositions(dashboardData.userPoolHistory?.items || []);
       const auctionOpportunities = this.buildAuctionOpportunities(dashboardData.recentAuctions?.items || []);
       const recentActivity = this.buildRecentActivity(
         dashboardData.userLoans?.items || [],
-        dashboardData.userPoolEvents?.items || [],
+        dashboardData.userPoolHistory?.items || [],
         dashboardData.userAuctions?.items || []
       );
+      const ownedNFTs = this.buildOwnedNFTs(userDomainsData.ownedNFTs || []);
+      const scoredDomains = userScoredDomains;
 
       const dashboard: UserDashboardDto = {
         stats,
-        activeLoans,
+        userLoans,
         liquidityPositions,
         auctionOpportunities,
-        recentActivity
+        recentActivity,
+        ownedNFTs,
+        scoredDomains
       };
 
       return { dashboard };
@@ -90,40 +107,13 @@ export class DashboardController {
 
   private async buildDashboardStats(dashboardData: any, userAddress: string): Promise<DashboardStatsDto> {
     const userLoans = dashboardData.userLoans?.items || [];
-    const userPoolEvents = dashboardData.userPoolEvents?.items || [];
+    const userPoolEvents = dashboardData.userPoolHistory?.items || [];
     const userAuctions = dashboardData.userAuctions?.items || [];
 
-    // Calculate active loans using the same logic as buildActiveLoans
-    const loansByLoanId = new Map();
-    userLoans.forEach(loan => {
-      const loanId = loan.loanId;
-      if (!loansByLoanId.has(loanId)) {
-        loansByLoanId.set(loanId, []);
-      }
-      loansByLoanId.get(loanId).push(loan);
-    });
-
-    const activeLoans: any[] = [];
-    loansByLoanId.forEach((loanEvents, loanId) => {
-      const sortedEvents = loanEvents.sort((a, b) => 
-        parseInt(b.eventTimestamp) - parseInt(a.eventTimestamp)
-      );
-      
-      const hasRepaidFull = sortedEvents.some(e => e.eventType === 'repaid_full');
-      const hasCollateralReleased = sortedEvents.some(e => e.eventType === 'collateral_released');
-      const hasLiquidated = sortedEvents.some(e => e.eventType === 'liquidated');
-      
-      if (!hasRepaidFull && !hasCollateralReleased && !hasLiquidated) {
-        const creationEvent = sortedEvents.find(e => 
-          e.eventType === 'created' || e.eventType === 'created_instant'
-        );
-        if (creationEvent) {
-          activeLoans.push(creationEvent);
-        }
-      }
-    });
+    // Calculate active loans - now simply filter by status
+    const activeLoans = userLoans.filter(loan => loan.status === 'active');
     const activeLoansValue = activeLoans.reduce((sum, loan) => 
-      sum + BigInt(loan.loanAmount || '0'), BigInt(0)
+      sum + BigInt(loan.originalAmount || '0'), BigInt(0)
     );
 
     // Calculate liquidity provided
@@ -139,7 +129,7 @@ export class DashboardController {
     const totalPortfolio = activeLoansValue + totalLiquidity;
 
     // Calculate earnings (simplified - would need more complex calculation in production)
-    const completedLoans = userLoans.filter(loan => loan.eventType === 'repaid');
+    const completedLoans = userLoans.filter(loan => loan.status === 'repaid');
     const estimatedEarnings = BigInt(completedLoans.length) * BigInt('100000000'); // 100 USDC per completed loan estimate
 
     // Count unique pools
@@ -147,7 +137,7 @@ export class DashboardController {
 
     return {
       totalPortfolio: (totalPortfolio / BigInt(1000000)).toString(), // Convert from wei to USDC
-      portfolioChangePercent: '12.3', // Mock data - would need historical data
+      // portfolioChangePercent: undefined, // Would need historical data tracking
       activeLoansCount: activeLoans.length,
       activeLoansValue: (activeLoansValue / BigInt(1000000)).toString(),
       liquidityProvided: (totalLiquidity / BigInt(1000000)).toString(),
@@ -156,58 +146,33 @@ export class DashboardController {
     };
   }
 
-  private buildActiveLoans(loans: any[]): ActiveLoanDto[] {
-    // Group loans by loanId to get the latest status for each loan
-    const loansByLoanId = new Map();
-    
-    loans.forEach(loan => {
-      const loanId = loan.loanId;
-      if (!loansByLoanId.has(loanId)) {
-        loansByLoanId.set(loanId, []);
-      }
-      loansByLoanId.get(loanId).push(loan);
-    });
-
-    const activeLoans: any[] = [];
-    
-    // For each loan, check if it's still active
-    loansByLoanId.forEach((loanEvents, loanId) => {
-      // Sort by timestamp to get latest events
-      const sortedEvents = loanEvents.sort((a, b) => 
-        parseInt(b.eventTimestamp) - parseInt(a.eventTimestamp)
-      );
-      
-      // Check if loan is still active (not repaid, liquidated, or collateral released)
-      const hasRepaidFull = sortedEvents.some(e => e.eventType === 'repaid_full');
-      const hasCollateralReleased = sortedEvents.some(e => e.eventType === 'collateral_released');
-      const hasLiquidated = sortedEvents.some(e => e.eventType === 'liquidated');
-      
-      // If none of these final events occurred, the loan is still active
-      if (!hasRepaidFull && !hasCollateralReleased && !hasLiquidated) {
-        // Find the creation event for this loan
-        const creationEvent = sortedEvents.find(e => 
-          e.eventType === 'created' || e.eventType === 'created_instant'
-        );
-        if (creationEvent) {
-          activeLoans.push(creationEvent);
-        }
-      }
-    });
-
-    return activeLoans.slice(0, 5).map(loan => {
+  private buildUserLoans(loans: any[]): UserLoanDto[] {
+    // Return all loans with their status - let frontend handle filtering/display
+    return loans.slice(0, 10).map(loan => {
       const repaymentDate = loan.repaymentDeadline ? 
         new Date(parseInt(loan.repaymentDeadline)).toLocaleDateString() : 
         'N/A';
       
       const now = Date.now();
       const deadline = loan.repaymentDeadline ? parseInt(loan.repaymentDeadline) : now + 86400000;
-      const isOverdue = deadline < now;
+      const isOverdue = loan.status === 'active' && deadline < now;
 
       return {
+        loanId: loan.loanId,
         domainName: loan.domainName || `Token #${loan.domainTokenId}`,
-        loanAmount: (BigInt(loan.loanAmount || '0') / BigInt(1000000)).toString(),
-        nextPaymentDate: repaymentDate,
-        status: isOverdue ? 'overdue' : 'active'
+        domainTokenId: loan.domainTokenId,
+        loanAmount: (BigInt(loan.originalAmount || '0') / BigInt(1000000)).toString(),
+        originalAmount: loan.originalAmount,
+        currentBalance: loan.currentBalance || loan.originalAmount,
+        totalRepaid: loan.totalRepaid || '0',
+        repaymentDate: repaymentDate,
+        status: isOverdue ? 'overdue' : loan.status,
+        aiScore: loan.aiScore,
+        interestRate: loan.interestRate,
+        poolId: loan.poolId,
+        createdAt: loan.createdAt,
+        liquidationAttempted: loan.liquidationAttempted,
+        liquidationTimestamp: loan.liquidationTimestamp
       };
     });
   }
@@ -280,17 +245,17 @@ export class DashboardController {
 
     // Add loan activities
     loans.slice(0, 3).forEach(loan => {
-      const date = new Date(parseInt(loan.eventTimestamp)).toLocaleDateString();
-      const amount = (BigInt(loan.loanAmount || '0') / BigInt(1000000)).toString();
+      const date = new Date(parseInt(loan.createdAt)).toLocaleDateString();
+      const amount = (BigInt(loan.originalAmount || '0') / BigInt(1000000)).toString();
       
-      if (loan.eventType === 'repaid') {
+      if (loan.status === 'repaid') {
         activities.push({
           type: 'loan_payment',
           description: `Loan payment for ${loan.domainName || 'domain'}`,
           date,
           amount
         });
-      } else if (loan.eventType === 'created') {
+      } else if (loan.status === 'active') {
         activities.push({
           type: 'new_loan',
           description: `New loan for ${loan.domainName || 'domain'}`,
@@ -321,6 +286,15 @@ export class DashboardController {
       .slice(0, 5);
   }
 
+  private buildOwnedNFTs(domains: any[]): DomainNFTDto[] {
+    return domains.map(domain => ({
+      tokenId: domain.tokenId,
+      name: domain.name || `Domain #${domain.tokenId}`,
+      owner: domain.owner,
+      metadata: domain.metadata
+    }));
+  }
+
   private calculateTimeRemaining(endTime: Date): string {
     const now = new Date();
     const diff = endTime.getTime() - now.getTime();
@@ -335,5 +309,48 @@ export class DashboardController {
     } else {
       return `Ends in ${hours}h`;
     }
+  }
+
+  private async buildScoredDomains(domains: any[]): Promise<EnhancedDomainDto[]> {
+    const enhancedDomains: EnhancedDomainDto[] = [];
+
+    for (const domain of domains) {
+      const enhancedDomain: EnhancedDomainDto = {
+        ...domain,
+        loanHistory: {
+          totalLoans: 0,
+          totalBorrowed: '0',
+          currentlyCollateralized: false,
+          averageLoanAmount: '0',
+          successfulRepayments: 0,
+          liquidations: 0
+        }
+      };
+
+      // Add AI score if available
+      try {
+        const scoreData = await this.domainScoreCacheService.getDomainScore(domain.name);
+        if (scoreData) {
+          enhancedDomain.aiScore = {
+            score: scoreData.totalScore,
+            confidence: scoreData.confidence,
+            lastUpdated: new Date().toISOString(),
+            factors: {
+              age: Math.round(scoreData.totalScore * 0.2),
+              extension: Math.round(scoreData.totalScore * 0.15),
+              length: Math.round(scoreData.totalScore * 0.1),
+              keywords: Math.round(scoreData.totalScore * 0.25),
+              traffic: Math.round(scoreData.totalScore * 0.3)
+            }
+          };
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get AI score for domain ${domain.name}:`, error.message);
+      }
+
+      enhancedDomains.push(enhancedDomain);
+    }
+
+    return enhancedDomains;
   }
 }
