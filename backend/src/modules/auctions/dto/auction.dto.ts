@@ -18,7 +18,7 @@ export class AuctionDomainDto {
 
   @ApiProperty({
     description: 'Domain NFT metadata',
-    type: DomaNFTDto
+    type: () => DomaNFTDto
   })
   metadata: DomaNFTDto;
 
@@ -93,7 +93,7 @@ export class AuctionDto {
 
   @ApiProperty({
     description: 'Domain information with enriched metadata',
-    type: AuctionDomainDto
+    type: () => AuctionDomainDto
   })
   domain: AuctionDomainDto;
 
@@ -166,7 +166,7 @@ export class GetAuctionsQueryDto {
 export class GetAuctionsResponseDto {
   @ApiProperty({
     description: 'List of auctions',
-    type: [AuctionDto]
+    type: () => [AuctionDto]
   })
   auctions: AuctionDto[];
 
@@ -192,7 +192,7 @@ export class GetAuctionsResponseDto {
 export class GetUserAuctionsResponseDto {
   @ApiProperty({
     description: 'List of user auctions',
-    type: [UserAuctionDto]
+    type: () => [UserAuctionDto]
   })
   auctions: UserAuctionDto[];
 
@@ -387,14 +387,14 @@ export class AuctionDetailDto {
 
   @ApiProperty({
     description: 'Domain information with enriched metadata',
-    type: AuctionDomainDto,
+    type: () => AuctionDomainDto,
     required: false,
   })
   domain?: AuctionDomainDto;
 
   @ApiProperty({
     description: 'All auction events in chronological order',
-    type: [AuctionEventDto],
+    type: () => [AuctionEventDto],
   })
   events: AuctionEventDto[];
 }
@@ -402,7 +402,7 @@ export class AuctionDetailDto {
 export class GetAuctionDetailResponseDto {
   @ApiProperty({
     description: 'Auction details with event history',
-    type: AuctionDetailDto,
+    type: () => AuctionDetailDto,
   })
   auction: AuctionDetailDto;
 }

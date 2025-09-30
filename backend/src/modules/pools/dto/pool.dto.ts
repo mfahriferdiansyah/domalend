@@ -178,7 +178,7 @@ export class GetPoolsResponseDto {
 export class LoanDto {
   @ApiProperty({
     description: 'Loan ID',
-    example: 'loan_12345',
+    example: '12345',
   })
   loanId: string;
 
@@ -201,8 +201,8 @@ export class LoanDto {
   domainName: string;
 
   @ApiProperty({
-    description: 'Loan amount',
-    example: '1000000000000000000',
+    description: 'Loan amount (formatted in USDC)',
+    example: '1000',
   })
   loanAmount: string;
 
@@ -219,27 +219,34 @@ export class LoanDto {
   interestRate: number;
 
   @ApiProperty({
-    description: 'Event type',
-    example: 'created_instant',
+    description: 'Loan status',
+    example: 'active',
+    enum: ['active', 'overdue', 'repaid', 'liquidated'],
+  })
+  status: 'active' | 'overdue' | 'repaid' | 'liquidated';
+
+  @ApiProperty({
+    description: 'Event type (for compatibility)',
+    example: 'loan_record',
   })
   eventType: string;
 
   @ApiProperty({
-    description: 'Event timestamp',
-    example: '2024-01-15T10:30:00Z',
+    description: 'Loan creation timestamp',
+    example: '1758975554000',
   })
   eventTimestamp: string;
 
   @ApiProperty({
     description: 'Repayment deadline',
-    example: '2024-02-15T10:30:00Z',
+    example: '1759235554000',
     required: false,
   })
   repaymentDeadline?: string;
 
   @ApiProperty({
     description: 'Pool ID',
-    example: 'pool_12345',
+    example: '12',
   })
   poolId: string;
 
@@ -251,7 +258,7 @@ export class LoanDto {
 
   @ApiProperty({
     description: 'Liquidation timestamp',
-    example: '2024-02-16T10:30:00Z',
+    example: '1759240000000',
     required: false,
   })
   liquidationTimestamp?: string;
@@ -260,7 +267,7 @@ export class LoanDto {
 export class GetPoolDetailResponseDto {
   @ApiProperty({
     description: 'Pool details',
-    type: PoolDto,
+    type: () => PoolDto,
   })
   pool: PoolDto;
 
@@ -502,7 +509,7 @@ export class DomainDetailDto extends DomainDto {
 export class GetDomainDetailResponseDto {
   @ApiProperty({
     description: 'Domain details with related data',
-    type: DomainDetailDto,
+    type: () => DomainDetailDto,
   })
   domain: DomainDetailDto;
 }
@@ -700,7 +707,7 @@ export class AuctionDetailDto {
 export class GetAuctionDetailResponseDto {
   @ApiProperty({
     description: 'Auction details with event history',
-    type: AuctionDetailDto,
+    type: () => AuctionDetailDto,
   })
   auction: AuctionDetailDto;
 }

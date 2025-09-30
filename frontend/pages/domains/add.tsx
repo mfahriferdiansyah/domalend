@@ -14,6 +14,7 @@ import { useAccount } from 'wagmi';
 import { useUserDomains } from '@/hooks/useDomaLendApi';
 import { ApiErrorState } from '@/components/common/api-error-boundary';
 import { GridLoadingState } from '@/components/common/api-loading-state';
+import { useDomaLend } from '@/hooks/web3/domalend/useDomaLend';
 
 interface DomainNFT {
   tokenId: string;
@@ -48,6 +49,7 @@ const AddDomainPage: NextPage = () => {
 
   const { address, isConnected } = useAccount();
   const { data: userDomainsData, loading: isLoading, error, refresh } = useUserDomains(address);
+  const { requestDomainScoring, isLoading: isSubmittingScore, error: scoreError } = useDomaLend();
 
   const userDomains = userDomainsData?.ownedNFTs || [];
 
@@ -65,22 +67,14 @@ const AddDomainPage: NextPage = () => {
     setIsSubmitting(true);
     
     try {
-      const response = await fetch('/contracts/submit-score', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tokenId: selectedDomain.tokenId
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit domain score');
+      const result = await requestDomainScoring(selectedDomain.tokenId);
+      
+      if (result.success) {
+        toast.success(`Domain scoring request submitted! Transaction hash: ${result.hash}`);
+        router.push('/domains');
+      } else {
+        throw new Error(result.error || 'Failed to submit domain score');
       }
-
-      toast.success('Domain score submitted successfully!');
-      router.push('/domains');
     } catch (error) {
       console.error('Error submitting domain score:', error);
       toast.error('Failed to submit domain score. Please try again.');
@@ -235,9 +229,18 @@ const AddDomainPage: NextPage = () => {
             <Alert className="mb-6">
               <Info className="h-4 w-4" />
               <AlertDescription>
-                By submitting this domain, you are requesting a score evaluation. This action will submit the domain&apos;s token ID to our scoring system.
+                By submitting this domain, you are requesting a score evaluation. This action will create a blockchain transaction to request scoring from the AI Oracle smart contract.
               </AlertDescription>
             </Alert>
+
+            {scoreError && (
+              <Alert className="mb-6 border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  Smart contract error: {scoreError}
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="flex gap-4">
               <Button
@@ -251,11 +254,11 @@ const AddDomainPage: NextPage = () => {
               <Button
                 type="button"
                 onClick={handleConfirmSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isSubmittingScore}
                 className="flex-1"
               >
-                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {isSubmitting ? 'Submitting...' : 'Submit Domain Score'}
+                {(isSubmitting || isSubmittingScore) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {(isSubmitting || isSubmittingScore) ? 'Submitting...' : 'Submit Domain Score'}
               </Button>
             </div>
           </CardContent>

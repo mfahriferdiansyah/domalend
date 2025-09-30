@@ -57,13 +57,23 @@ export interface Loan {
   borrower: string;
   domainTokenId: string;
   domainName: string;
-  principal: number;
-  currentBalance: number;
+  originalAmount: string;          // Updated to match backend
+  currentBalance: string;          // Now string to match backend
+  totalRepaid: string;             // New field from loan table
   interestRate: number;
+  aiScore?: number;                // New field from loan table
+  poolId?: string;                 // New field from loan table
+  status: 'active' | 'repaid' | 'defaulted' | 'liquidated'; // Updated statuses
+  repaymentDeadline: string;       // Updated field name
+  createdAt: string;               // Updated field name
+  lastUpdated: string;             // New field from loan table
+  liquidationAttempted: boolean;   // New field from loan table
+  
+  // Legacy fields for compatibility
+  principal: number;
   term: number;
   startDate: string;
   dueDate: string;
-  status: 'active' | 'overdue' | 'defaulted' | 'repaid' | 'liquidating';
   collateralValue: number;
   ltvRatio: number;
   monthlyPayment: number;
@@ -367,7 +377,20 @@ class DomaLendAPI {
     return response.data;
   }
 
-  // Pool APIs
+  async getUserRelatedAuctions(address: string): Promise<{
+    auctions: Auction[];
+    total: number;
+  }> {
+    const response = await this.api.get(`/auctions/user/${address}`, {
+      params: {
+        limit: 10,
+        status: 'active'
+      }
+    });
+    return response.data;
+  }
+
+  // Pool APIs - Updated for new pool + poolHistory schema
   async getPools(params?: {
     page?: number;
     limit?: number;
@@ -382,12 +405,12 @@ class DomaLendAPI {
       minAiScore: number;
       interestRate: number;
       createdAt: string;
-      totalLiquidity: string;
-      liquidityProviderCount: number;
+      totalLiquidity: string;          // Now calculated automatically in pool table
+      liquidityProviderCount: number;  // From participantCount in pool table
       activeLoans: number;
       totalLoanVolume: string;
       defaultRate: number;
-      status: string;
+      status: string;                  // 'active' | 'paused' | 'closed'
     }>;
     total: number;
     page: number;
@@ -414,14 +437,14 @@ class DomaLendAPI {
       minAiScore: number;
       interestRate: number;
       createdAt: string;
-      totalLiquidity: string;
-      liquidityProviderCount: number;
+      totalLiquidity: string;          // Now calculated automatically in pool table
+      liquidityProviderCount: number;  // From participantCount in pool table
       activeLoans: number;
       totalLoanVolume: string;
       defaultRate: number;
-      status: string;
-      userContribution: string;
-      userContributedAt: string;
+      status: string;                  // 'active' | 'paused' | 'closed'
+      userContribution: string;        // Calculated from poolHistory events
+      userContributedAt: string;       // From earliest poolHistory event
       userIsCreator: boolean;
     }>;
     summary: {
@@ -440,12 +463,12 @@ class DomaLendAPI {
       minAiScore: number;
       interestRate: number;
       createdAt: string;
-      totalLiquidity: string;
-      liquidityProviderCount: number;
+      totalLiquidity: string;          // Now calculated automatically in pool table
+      liquidityProviderCount: number;  // From participantCount in pool table
       activeLoans: number;
       totalLoanVolume: string;
       defaultRate: number;
-      status: string;
+      status: string;                  // 'active' | 'paused' | 'closed'
     };
     loans?: Array<{
       loanId: string;
@@ -675,18 +698,28 @@ class DomaLendAPI {
     dashboard: {
       stats: {
         totalPortfolio: string;
-        portfolioChangePercent: string;
         activeLoansCount: number;
         activeLoansValue: string;
         liquidityProvided: string;
         liquidityPoolsCount: number;
         totalEarnings: string;
       };
-      activeLoans: Array<{
+      userLoans: Array<{
+        loanId: string;
         domainName: string;
+        domainTokenId: string;
         loanAmount: string;
-        nextPaymentDate: string;
-        status: 'active' | 'overdue' | 'completed';
+        originalAmount: string;
+        currentBalance: string;
+        totalRepaid: string;
+        repaymentDate: string;
+        status: 'active' | 'overdue' | 'repaid' | 'liquidated';
+        aiScore: number;
+        interestRate: number;
+        poolId: string;
+        createdAt: string;
+        liquidationAttempted: boolean;
+        liquidationTimestamp?: string;
       }>;
       liquidityPositions: Array<{
         poolName: string;
@@ -707,6 +740,54 @@ class DomaLendAPI {
         description: string;
         date: string;
         amount: string;
+      }>;
+      ownedNFTs: Array<{
+        tokenId: string;
+        name: string;
+        owner: string;
+        metadata?: {
+          attributes?: Array<{
+            trait_type: string;
+            value: string | number;
+          }>;
+        };
+      }>;
+      scoredDomains: Array<{
+        tokenId: string;
+        owner: string;
+        name: string;
+        description: string;
+        image: string;
+        externalUrl: string;
+        attributes: Array<{
+          display_type?: string;
+          trait_type: string;
+          value: string | number;
+        }>;
+        expirationDate: number;
+        tld: string;
+        characterLength: number;
+        registrar: string;
+        loanHistory: {
+          totalLoans: number;
+          totalBorrowed: string;
+          currentlyCollateralized: boolean;
+          averageLoanAmount: string;
+          successfulRepayments: number;
+          liquidations: number;
+        };
+        aiScore: {
+          score: number;
+          confidence: number;
+          lastUpdated: string;
+          factors: {
+            age: number;
+            extension: number;
+            length: number;
+            keywords: number;
+            traffic: number;
+          };
+        };
       }>;
     };
   }> {

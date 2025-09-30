@@ -53,13 +53,13 @@ export class PoolsController {
     this.logger.log(`Getting pools: page=${page}, limit=${limit}, minAiScore=${minAiScore}, status=${status}`);
 
     try {
-      // Get pool creation events
+      // Get pools directly from pool table
       const poolData = await this.indexerService.queryPools({
         where: this.buildPoolWhereClause({ minAiScore, status }),
         limit: limit
       });
 
-      const pools = await this.buildPoolObjects(poolData.poolEvents?.items || []);
+      const pools = await this.buildPoolObjects(poolData.pools?.items || []);
 
       return {
         pools,
@@ -98,12 +98,12 @@ export class PoolsController {
     }
 
     try {
-      // Get user's liquidity events
-      const userPoolData = await this.indexerService.queryPools({
+      // Get user's liquidity events from pool history
+      const userPoolHistoryData = await this.indexerService.queryPoolHistory({
         where: { providerAddress: address, eventType_in: ["liquidity_added", "liquidity_removed"] }
       });
 
-      const pools = await this.buildUserPoolObjects(userPoolData.poolEvents?.items || [], address);
+      const pools = await this.buildUserPoolObjects(userPoolHistoryData.poolHistorys?.items || [], address);
 
       const summary = {
         totalPools: pools.length,
@@ -152,35 +152,31 @@ export class PoolsController {
     const shouldIncludeLoans = includeLoans === 'true';
 
     try {
-      // Get pool creation event
+      // Get pool from pool table
       const poolData = await this.indexerService.queryPools({
-        where: { eventType: "created", poolId },
+        where: { poolId },
         includeLoans: shouldIncludeLoans
       });
 
-      const poolEvents = poolData.poolEvents?.items || [];
-      if (poolEvents.length === 0) {
-        throw new HttpException('Pool not found', HttpStatus.NOT_FOUND);
-      }
-
-
-      const pools = await this.buildPoolObjects(poolEvents);
+      const pools = poolData.pools?.items || [];
       if (pools.length === 0) {
         throw new HttpException('Pool not found', HttpStatus.NOT_FOUND);
       }
 
-      const result: GetPoolDetailResponseDto = { pool: pools[0] };
+      const poolRecord = pools[0];
+      const pool = await this.buildPoolObjectFromRecord(poolRecord);
+
+      const result: GetPoolDetailResponseDto = { pool };
 
       // Include loans if requested (either from relations or separate query)
       if (shouldIncludeLoans) {
-        const poolEvent = poolEvents[0];
-        if (poolEvent.loans?.items && poolEvent.loans.items.length > 0) {
+        if (poolRecord.loans?.items && poolRecord.loans.items.length > 0) {
           // Use loans from relations
-          result.loans = this.buildLoanObjects(poolEvent.loans.items);
+          result.loans = this.buildLoanObjects(poolRecord.loans.items);
         } else {
           // Fallback to separate query
           const loanData = await this.indexerService.queryLoansByPool(poolId, 50);
-          result.loans = this.buildLoanObjects(loanData.loanEvents?.items || []);
+          result.loans = this.buildLoanObjects(loanData.loans?.items || []);
         }
       }
 
@@ -194,36 +190,25 @@ export class PoolsController {
     }
   }
 
-  private async buildPoolObjects(poolEvents: any[]): Promise<PoolDto[]> {
-    // Group by poolId to get unique pools
-    const poolMap = new Map();
-
-    poolEvents.forEach(event => {
-      if (event.eventType === 'created' && !poolMap.has(event.poolId)) {
-        // Format timestamp to ISO string for better readability
-        const createdAt = new Date(parseInt(event.eventTimestamp)).toISOString();
-        
-        // Handle liquidityAmount properly - it should be a string but might be null
-        const liquidityAmount = event.liquidityAmount || '0';
-        
-        poolMap.set(event.poolId, {
-          poolId: event.poolId,
-          creator: event.creatorAddress,
-          minAiScore: event.minAiScore,
-          interestRate: event.interestRate,
-          createdAt: createdAt,
-          // Use initial liquidity from creation event if available
-          totalLiquidity: liquidityAmount,
-          liquidityProviderCount: liquidityAmount && liquidityAmount !== '0' ? 1 : 0,
-          activeLoans: 0,
-          totalLoanVolume: '0',
-          defaultRate: 0,
-          status: 'active' as const
-        });
-      }
+  private async buildPoolObjects(poolRecords: any[]): Promise<PoolDto[]> {
+    const pools: PoolDto[] = poolRecords.map(record => {
+      // Format timestamp to ISO string for better readability
+      const createdAt = new Date(parseInt(record.createdAt)).toISOString();
+      
+      return {
+        poolId: record.poolId,
+        creator: record.creatorAddress,
+        minAiScore: record.minAiScore,
+        interestRate: record.interestRate,
+        createdAt: createdAt,
+        totalLiquidity: record.totalLiquidity || '0',
+        liquidityProviderCount: record.participantCount || 0,
+        activeLoans: 0, // Will be enhanced
+        totalLoanVolume: '0', // Will be enhanced
+        defaultRate: 0, // Will be enhanced
+        status: record.status as 'active' | 'inactive'
+      };
     });
-
-    const pools = Array.from(poolMap.values()) as PoolDto[];
 
     // Get additional stats for these pools
     if (pools.length > 0) {
@@ -231,6 +216,29 @@ export class PoolsController {
     }
 
     return pools;
+  }
+
+  private async buildPoolObjectFromRecord(record: any): Promise<PoolDto> {
+    const createdAt = new Date(parseInt(record.createdAt)).toISOString();
+    
+    const pool: PoolDto = {
+      poolId: record.poolId,
+      creator: record.creatorAddress,
+      minAiScore: record.minAiScore,
+      interestRate: record.interestRate,
+      createdAt: createdAt,
+      totalLiquidity: record.totalLiquidity || '0',
+      liquidityProviderCount: record.participantCount || 0,
+      activeLoans: 0, // Will be enhanced
+      totalLoanVolume: '0', // Will be enhanced
+      defaultRate: 0, // Will be enhanced
+      status: record.status as 'active' | 'inactive'
+    };
+
+    // Get additional stats for this pool
+    await this.enhancePoolsWithStats([pool]);
+
+    return pool;
   }
 
   private async buildUserPoolObjects(userPoolEvents: any[], userAddress: string): Promise<UserPoolDto[]> {
@@ -268,10 +276,10 @@ export class PoolsController {
     }
 
     const poolDetailsData = await this.indexerService.queryPools({
-      where: { eventType: "created", poolId_in: poolIds }
+      where: { poolId_in: poolIds }
     });
 
-    const basePools = await this.buildPoolObjects(poolDetailsData.poolEvents?.items || []);
+    const basePools = await this.buildPoolObjects(poolDetailsData.pools?.items || []);
 
     // Combine base pool data with user-specific data
     const userPools: UserPoolDto[] = basePools.map(pool => {
@@ -293,8 +301,8 @@ export class PoolsController {
     const poolIds = pools.map(p => p.poolId);
 
     try {
-      // Get liquidity stats
-      const liquidityData = await this.indexerService.queryPools({
+      // Get liquidity stats from pool history
+      const liquidityData = await this.indexerService.queryPoolHistory({
         where: { poolId_in: poolIds, eventType_in: ["liquidity_added", "liquidity_removed"] }
       });
 
@@ -303,8 +311,8 @@ export class PoolsController {
 
       // Calculate stats for each pool
       pools.forEach(pool => {
-        this.calculatePoolLiquidityStats(pool, liquidityData.poolEvents?.items || []);
-        this.calculatePoolLoanStats(pool, loanData.loanEvents?.items || []);
+        this.calculatePoolLiquidityStats(pool, liquidityData.poolHistorys?.items || []);
+        this.calculatePoolLoanStats(pool, loanData.loans?.items || []);
       });
     } catch (error) {
       this.logger.warn('Failed to enhance pools with stats, using defaults:', error);
@@ -315,89 +323,70 @@ export class PoolsController {
   private calculatePoolLiquidityStats(pool: PoolDto, liquidityEvents: any[]): void {
     const poolLiquidityEvents = liquidityEvents.filter(e => e.poolId === pool.poolId);
 
-    const added: bigint = poolLiquidityEvents
-      .filter(e => e.eventType === 'liquidity_added')
-      .reduce((sum: bigint, e) => sum + BigInt(e.liquidityAmount || '0'), 0n);
-
-    const removed: bigint = poolLiquidityEvents
-      .filter(e => e.eventType === 'liquidity_removed')
-      .reduce((sum: bigint, e) => sum + BigInt(e.liquidityAmount || '0'), 0n);
-
-    // Include initial liquidity from pool creation (which is already set in buildPoolObjects)
-    const initialLiquidity: bigint = BigInt(pool.totalLiquidity || '0');
-    const netLiquidityChanges: bigint = added - removed;
-    
-    const finalLiquidity: bigint = initialLiquidity + netLiquidityChanges;
-    
-    
-    pool.totalLiquidity = finalLiquidity.toString();
-    
-    // Count unique providers (including creator if there's initial liquidity)
+    // totalLiquidity is already calculated and stored in the pool record
+    // We just need to count unique providers
     const providers = new Set(poolLiquidityEvents.map(e => e.providerAddress).filter(addr => addr));
-    if (initialLiquidity > 0n) {
-      providers.add(pool.creator); // Add creator as initial liquidity provider
+    
+    // Add creator as a provider if they created with initial liquidity
+    if (BigInt(pool.totalLiquidity || '0') > 0n) {
+      providers.add(pool.creator);
     }
-    pool.liquidityProviderCount = providers.size;
+    
+    pool.liquidityProviderCount = providers.size || pool.liquidityProviderCount;
   }
 
-  private calculatePoolLoanStats(pool: PoolDto, loanEvents: any[]): void {
-    const poolLoans = loanEvents.filter(e => e.poolId === pool.poolId);
+  private calculatePoolLoanStats(pool: PoolDto, loans: any[]): void {
+    const poolLoans = loans.filter(loan => loan.poolId === pool.poolId);
 
-    pool.activeLoans = poolLoans.filter(e =>
-      !['repaid_full', 'liquidated'].includes(e.eventType)
+    pool.activeLoans = poolLoans.filter(loan =>
+      loan.status === 'active'
     ).length;
 
     pool.totalLoanVolume = poolLoans
-      .reduce((sum, e) => sum + BigInt(e.loanAmount || '0'), 0n)
+      .reduce((sum, loan) => sum + BigInt(loan.originalAmount || '0'), 0n)
       .toString();
 
     const totalLoans = poolLoans.length;
-    const defaultedLoans = poolLoans.filter(e => e.eventType === 'defaulted').length;
-    pool.defaultRate = totalLoans > 0 ? defaultedLoans / totalLoans : 0;
+    const liquidatedLoans = poolLoans.filter(loan => loan.status === 'liquidated').length;
+    pool.defaultRate = totalLoans > 0 ? liquidatedLoans / totalLoans : 0;
   }
 
-  private buildLoanObjects(loanEvents: any[]): LoanDto[] {
-    // Group events by loanId and keep the latest event for each loan
-    const loanMap = new Map();
-    
-    loanEvents.forEach(event => {
-      const existingEvent = loanMap.get(event.loanId);
-      
-      // Keep the event with the latest timestamp, or if timestamps are equal, prefer events with aiScore
-      if (!existingEvent || 
-          parseInt(event.eventTimestamp) > parseInt(existingEvent.eventTimestamp) ||
-          (parseInt(event.eventTimestamp) === parseInt(existingEvent.eventTimestamp) && event.aiScore && !existingEvent.aiScore)) {
-        loanMap.set(event.loanId, event);
-      }
+  private buildLoanObjects(loans: any[]): LoanDto[] {
+    // Convert loan records to LoanDto array - these are now from the loan table, not events
+    return loans.map(loan => {
+      const now = Date.now();
+      const deadline = loan.repaymentDeadline ? parseInt(loan.repaymentDeadline) : now + 86400000;
+      const isOverdue = loan.status === 'active' && deadline < now;
+
+      return {
+        loanId: loan.loanId,
+        borrowerAddress: loan.borrowerAddress,
+        domainTokenId: loan.domainTokenId,
+        domainName: loan.domainName,
+        loanAmount: (BigInt(loan.originalAmount || '0') / BigInt(1000000)).toString(), // Convert to USDC format
+        aiScore: loan.aiScore,
+        interestRate: loan.interestRate,
+        status: isOverdue ? 'overdue' : loan.status,
+        eventType: 'loan_record', // This is now a loan record, not an event
+        eventTimestamp: loan.createdAt,
+        repaymentDeadline: loan.repaymentDeadline,
+        poolId: loan.poolId,
+        liquidationAttempted: loan.liquidationAttempted,
+        liquidationTimestamp: loan.liquidationTimestamp
+      };
     });
-    
-    // Convert map values to LoanDto array
-    return Array.from(loanMap.values()).map(event => ({
-      loanId: event.loanId,
-      borrowerAddress: event.borrowerAddress,
-      domainTokenId: event.domainTokenId,
-      domainName: event.domainName,
-      loanAmount: event.loanAmount,
-      aiScore: event.aiScore,
-      interestRate: event.interestRate,
-      eventType: event.eventType,
-      eventTimestamp: event.eventTimestamp,
-      repaymentDeadline: event.repaymentDeadline,
-      poolId: event.poolId,
-      liquidationAttempted: event.liquidationAttempted,
-      liquidationTimestamp: event.liquidationTimestamp
-    }));
   }
 
   private buildPoolWhereClause(filters: { minAiScore?: number; status?: string }): any {
-    const where: any = { eventType: "created" };
+    const where: any = {};
 
     if (filters.minAiScore !== undefined) {
       where.minAiScore_gte = filters.minAiScore;
     }
 
-    // Note: status filtering would need additional logic based on pool activity
-    // For now, we assume all created pools are active
+    if (filters.status) {
+      where.status = filters.status;
+    }
 
     return where;
   }

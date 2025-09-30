@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Clock, TrendingDown, AlertCircle, DollarSign, Calendar, User, Hash } from 'lucide-react';
 import Link from 'next/link';
 import { domaLendAPI, AuctionDetail, AuctionEvent } from '@/services/domalend-api';
+import { useDomaLend } from '@/hooks/web3/domalend/useDomaLend';
+import { toast } from 'sonner';
 
 const AuctionDetailPage: NextPage = () => {
   const router = useRouter();
@@ -16,6 +18,8 @@ const AuctionDetailPage: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bidAmount, setBidAmount] = useState('');
+  
+  const { placeBid, isLoading: isBidLoading, error: bidError } = useDomaLend();
 
   useEffect(() => {
     if (id && typeof id === 'string') {
@@ -39,10 +43,26 @@ const AuctionDetailPage: NextPage = () => {
   };
 
   const handlePlaceBid = async () => {
-    if (!auction || !bidAmount) return;
+    if (!auction || !bidAmount) {
+      toast.error('Please enter a bid amount');
+      return;
+    }
 
-    // TODO: Implement bid placement logic
-    console.log(`Placing bid of $${bidAmount} on auction ${auction.auctionId}`);
+    try {
+      const result = await placeBid(auction.auctionId, bidAmount);
+      
+      if (result.success) {
+        toast.success(`Bid placed successfully! Transaction hash: ${result.hash}`);
+        setBidAmount('');
+        // Refresh auction data to show updated status
+        await fetchAuctionDetail(auction.auctionId);
+      } else {
+        throw new Error(result.error || 'Failed to place bid');
+      }
+    } catch (error) {
+      console.error('Error placing bid:', error);
+      toast.error('Failed to place bid. Please try again.');
+    }
   };
 
   const formatTimeLeft = (startTime: string, endTime?: string) => {
@@ -285,10 +305,17 @@ const AuctionDetailPage: NextPage = () => {
                   <Button
                     className="w-full"
                     onClick={handlePlaceBid}
-                    disabled={!bidAmount}
+                    disabled={!bidAmount || isBidLoading}
                   >
-                    Place Bid
+                    {isBidLoading ? 'Placing Bid...' : 'Place Bid'}
                   </Button>
+
+                  {bidError && (
+                    <div className="text-sm text-red-600 mt-2">
+                      <AlertCircle className="h-4 w-4 inline mr-1" />
+                      {bidError}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -28,38 +28,71 @@ export const scoringEvent = onchainTable(
   })
 );
 
-// Loan Events from SatoruLending and LoanManager
-export const loanEvent = onchainTable(
-  "loan_event", 
+// Loan state table - one record per loan
+export const loan = onchainTable(
+  "loan",
   (t) => ({
-    id: t.text().primaryKey(),
-    eventType: t.text().notNull(), // 'created_instant', 'created_crowdfunded', 'repaid_full', 'repaid_partial', 'liquidated', 'defaulted', 'collateral_locked', 'collateral_released'
-    loanId: t.text(),
+    id: t.text().primaryKey(), // loanId
+    loanId: t.text().notNull(),
     requestId: t.text(),
     borrowerAddress: t.hex().notNull(),
     domainTokenId: t.text().notNull(),
     domainName: t.text(),
-    loanAmount: t.text().notNull(), // Store as string to avoid precision loss
+    originalAmount: t.text().notNull(), // Original loan amount
+    currentBalance: t.text().notNull(), // Current outstanding balance
+    totalRepaid: t.text().notNull().default("0"), // Total amount repaid so far
+    aiScore: t.integer(),
+    interestRate: t.integer(),
+    poolId: t.text(),
+    status: t.text().notNull().default("active"), // 'active', 'repaid', 'defaulted', 'liquidated'
+    repaymentDeadline: t.timestamp(),
+    liquidationAttempted: t.boolean().notNull().default(false),
+    liquidationTxHash: t.text(),
+    liquidationTimestamp: t.timestamp(),
+    liquidationBufferHours: t.integer().default(24),
+    createdAt: t.timestamp().notNull(),
+    lastUpdated: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    loanIdIndex: index().on(table.loanId),
+    domainTokenIdIndex: index().on(table.domainTokenId),
+    borrowerIndex: index().on(table.borrowerAddress),
+    statusIndex: index().on(table.status),
+    poolIdIndex: index().on(table.poolId),
+    repaymentDeadlineIndex: index().on(table.repaymentDeadline),
+  })
+);
+
+// Loan history table - event log for audit trail
+export const loanHistory = onchainTable(
+  "loan_history", 
+  (t) => ({
+    id: t.text().primaryKey(),
+    loanId: t.text().notNull(),
+    eventType: t.text().notNull(), // 'created_instant', 'created_crowdfunded', 'repaid_full', 'repaid_partial', 'liquidated', 'defaulted', 'collateral_locked', 'collateral_released'
+    requestId: t.text(),
+    borrowerAddress: t.hex().notNull(),
+    domainTokenId: t.text().notNull(),
+    domainName: t.text(),
+    amount: t.text(), // Amount for this specific event (repayment amount, liquidation amount, etc.)
+    remainingBalance: t.text(), // Balance after this event
     aiScore: t.integer(),
     interestRate: t.integer(),
     poolId: t.text(),
     repaymentDeadline: t.timestamp(),
+    liquidationTxHash: t.text(),
     eventTimestamp: t.timestamp().notNull(),
     blockNumber: t.bigint().notNull(),
     transactionHash: t.hex().notNull(),
-    // Liquidation tracking fields
-    liquidationAttempted: t.boolean().notNull().default(false),
-    liquidationTxHash: t.text(),
-    liquidationTimestamp: t.timestamp(),
-    liquidationBufferHours: t.integer().default(24), // Buffer period before liquidation
   }),
   (table) => ({
     loanIdIndex: index().on(table.loanId),
     domainTokenIdIndex: index().on(table.domainTokenId),
     eventTypeIndex: index().on(table.eventType),
     eventTimestampIndex: index().on(table.eventTimestamp),
-    liquidationAttemptedIndex: index().on(table.liquidationAttempted),
-    repaymentDeadlineIndex: index().on(table.repaymentDeadline),
+    borrowerIndex: index().on(table.borrowerAddress),
   })
 );
 
@@ -166,14 +199,37 @@ export const loanFunding = onchainTable(
   })
 );
 
-// Pool Events from SatoruLending
-export const poolEvent = onchainTable(
-  "pool_event",
+// Pool state table - one record per pool
+export const pool = onchainTable(
+  "pool",
   (t) => ({
-    id: t.text().primaryKey(),
-    eventType: t.text().notNull(), // 'created', 'liquidity_added', 'liquidity_removed', 'updated'
+    id: t.text().primaryKey(), // poolId
     poolId: t.text().notNull(),
     creatorAddress: t.hex().notNull(),
+    totalLiquidity: t.text().notNull().default("0"),
+    minAiScore: t.integer(),
+    interestRate: t.integer(),
+    participantCount: t.integer().notNull().default(0),
+    status: t.text().notNull().default("active"), // 'active', 'paused', 'closed'
+    createdAt: t.timestamp().notNull(),
+    lastUpdated: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    poolIdIndex: index().on(table.poolId),
+    statusIndex: index().on(table.status),
+    creatorIndex: index().on(table.creatorAddress),
+  })
+);
+
+// Pool history table - event log for audit trail
+export const poolHistory = onchainTable(
+  "pool_history",
+  (t) => ({
+    id: t.text().primaryKey(),
+    poolId: t.text().notNull(),
+    eventType: t.text().notNull(), // 'created', 'liquidity_added', 'liquidity_removed', 'updated', 'paused', 'closed'
     providerAddress: t.hex(),
     liquidityAmount: t.text(),
     minAiScore: t.integer(),
@@ -185,6 +241,7 @@ export const poolEvent = onchainTable(
   (table) => ({
     poolIdIndex: index().on(table.poolId),
     eventTypeIndex: index().on(table.eventType),
+    eventTimestampIndex: index().on(table.eventTimestamp),
   })
 );
 
@@ -276,29 +333,45 @@ export const batchOperation = onchainTable(
 );
 
 // Relations
-export const poolEventRelations = relations(poolEvent, ({ many }) => ({
-  loans: many(loanEvent, {
+export const poolRelations = relations(pool, ({ many }) => ({
+  history: many(poolHistory),
+  loans: many(loan, {
     relationName: "poolLoans",
   }),
 }));
 
-export const loanEventRelations = relations(loanEvent, ({ one, many }) => ({
-  pool: one(poolEvent, {
-    fields: [loanEvent.poolId],
-    references: [poolEvent.poolId],
+export const poolHistoryRelations = relations(poolHistory, ({ one }) => ({
+  pool: one(pool, {
+    fields: [poolHistory.poolId],
+    references: [pool.poolId],
+  }),
+}));
+
+export const loanRelations = relations(loan, ({ one, many }) => ({
+  pool: one(pool, {
+    fields: [loan.poolId],
+    references: [pool.poolId],
     relationName: "poolLoans",
   }),
+  history: many(loanHistory),
   auctions: many(auction),
   domain: one(domainAnalytics, {
-    fields: [loanEvent.domainTokenId],
+    fields: [loan.domainTokenId],
     references: [domainAnalytics.domainTokenId],
   }),
 }));
 
+export const loanHistoryRelations = relations(loanHistory, ({ one }) => ({
+  loan: one(loan, {
+    fields: [loanHistory.loanId],
+    references: [loan.loanId],
+  }),
+}));
+
 export const auctionRelations = relations(auction, ({ one, many }) => ({
-  loan: one(loanEvent, {
+  loan: one(loan, {
     fields: [auction.loanId],
-    references: [loanEvent.loanId],
+    references: [loan.loanId],
   }),
   domain: one(domainAnalytics, {
     fields: [auction.domainTokenId],
@@ -315,7 +388,7 @@ export const auctionHistoryRelations = relations(auctionHistory, ({ one }) => ({
 }));
 
 export const domainAnalyticsRelations = relations(domainAnalytics, ({ many }) => ({
-  loans: many(loanEvent),
+  loans: many(loan),
   auctions: many(auction),
   scoringEvents: many(scoringEvent),
 }));

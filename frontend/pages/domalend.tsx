@@ -55,17 +55,17 @@ const DomaLendPage: NextPage = () => {
       description: "Advanced machine learning models analyze domain age, keywords, traffic, and market data for precise valuations."
     },
     {
-      icon: <Shield className="h-8 w-8 text-green-600" />,
+      icon: <Shield className="h-8 w-8 text-blue-600" />,
       title: "Secure Collateral",
       description: "Your domain NFTs are safely held in smart contracts with automated liquidation protection."
     },
     {
-      icon: <Zap className="h-8 w-8 text-yellow-600" />,
+      icon: <Zap className="h-8 w-8 text-blue-600" />,
       title: "Instant Loans",
       description: "Get approved in minutes with our instant loan pools powered by algorithmic risk assessment."
     },
     {
-      icon: <Users className="h-8 w-8 text-purple-600" />,
+      icon: <Users className="h-8 w-8 text-blue-600" />,
       title: "Community Driven",
       description: "Create custom lending pools with your own criteria or join community-funded opportunities."
     }
@@ -161,7 +161,7 @@ const DomaLendPage: NextPage = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-20">
             <Card>
               <CardContent className="p-4 text-center">
-                <DollarSign className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <DollarSign className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   ${stats.totalValueLocked.toLocaleString()}
                 </div>
@@ -181,7 +181,7 @@ const DomaLendPage: NextPage = () => {
 
             <Card>
               <CardContent className="p-4 text-center">
-                <TrendingUp className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                <TrendingUp className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {stats.averageAPY}%
                 </div>
@@ -191,7 +191,7 @@ const DomaLendPage: NextPage = () => {
 
             <Card>
               <CardContent className="p-4 text-center">
-                <Clock className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+                <Clock className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {stats.totalActiveLoans}
                 </div>
@@ -201,7 +201,7 @@ const DomaLendPage: NextPage = () => {
 
             <Card>
               <CardContent className="p-4 text-center">
-                <Droplets className="h-8 w-8 text-cyan-600 mx-auto mb-2" />
+                <Droplets className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {stats.totalPools}
                 </div>
@@ -211,7 +211,7 @@ const DomaLendPage: NextPage = () => {
 
             <Card>
               <CardContent className="p-4 text-center">
-                <Users className="h-8 w-8 text-pink-600 mx-auto mb-2" />
+                <Users className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {stats.totalAuctions}
                 </div>

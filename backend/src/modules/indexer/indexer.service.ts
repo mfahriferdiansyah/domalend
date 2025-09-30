@@ -14,24 +14,62 @@ export class IndexerService {
   async queryLoans(filters: any): Promise<any> {
     const { where, limit = 20 } = filters;
     const query = `
-      query GetLoans($where: loanEventFilter, $limit: Int) {
-        loanEvents(
+      query GetLoans($where: loanFilter, $limit: Int) {
+        loans(
           where: $where,
           limit: $limit,
-          orderBy: "eventTimestamp",
+          orderBy: "createdAt",
           orderDirection: "desc"
         ) {
           items {
+            id
             loanId
             borrowerAddress
             domainTokenId
             domainName
-            loanAmount
+            originalAmount
+            currentBalance
+            totalRepaid
             aiScore
-            eventType
-            eventTimestamp
+            status
             repaymentDeadline
             poolId
+            createdAt
+            lastUpdated
+            liquidationAttempted
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { where, limit });
+  }
+
+  async queryLoanHistory(filters: any): Promise<any> {
+    const { where, limit = 20 } = filters;
+    const query = `
+      query GetLoanHistory($where: loanHistoryFilter, $limit: Int) {
+        loanHistorys(
+          where: $where,
+          limit: $limit,
+          orderBy: "createdAt",
+          orderDirection: "desc"
+        ) {
+          items {
+            id
+            loanId
+            status
+            borrowerAddress
+            domainTokenId
+            domainName
+            amount
+            remainingBalance
+            aiScore
+            interestRate
+            poolId
+            createdAt
+            blockNumber
+            transactionHash
           }
         }
       }
@@ -45,39 +83,74 @@ export class IndexerService {
     const loansFragment = includeLoans ? `
       loans {
         items {
+          id
           loanId
           borrowerAddress
           domainTokenId
           domainName
-          loanAmount
+          originalAmount
+          currentBalance
+          totalRepaid
           aiScore
-          interestRate
-          eventType
-          eventTimestamp
+          status
           repaymentDeadline
+          createdAt
+          lastUpdated
           liquidationAttempted
-          liquidationTimestamp
         }
       }` : '';
 
     const query = `
-      query GetPools($where: poolEventFilter, $limit: Int) {
-        poolEvents(
+      query GetPools($where: poolFilter, $limit: Int) {
+        pools(
+          where: $where,
+          limit: $limit,
+          orderBy: "createdAt",
+          orderDirection: "desc"
+        ) {
+          items {
+            id
+            poolId
+            creatorAddress
+            totalLiquidity
+            minAiScore
+            interestRate
+            participantCount
+            status
+            createdAt
+            lastUpdated
+            blockNumber
+            transactionHash
+            ${loansFragment}
+          }
+        }
+      }
+    `;
+
+    return this.executeQuery(query, { where, limit });
+  }
+
+  async queryPoolHistory(filters: any): Promise<any> {
+    const { where, limit = 20 } = filters;
+    const query = `
+      query GetPoolHistory($where: poolHistoryFilter, $limit: Int) {
+        poolHistorys(
           where: $where,
           limit: $limit,
           orderBy: "eventTimestamp",
           orderDirection: "desc"
         ) {
           items {
+            id
             poolId
-            creatorAddress
+            eventType
+            providerAddress
+            liquidityAmount
             minAiScore
             interestRate
-            liquidityAmount
-            eventType
             eventTimestamp
-            providerAddress
-            ${loansFragment}
+            blockNumber
+            transactionHash
           }
         }
       }
@@ -88,14 +161,14 @@ export class IndexerService {
 
   async queryPoolLoanStats(poolIds: string[]): Promise<any> {
     const query = `
-      query GetPoolLoanStats($where: loanEventFilter) {
-        loanEvents(
+      query GetPoolLoanStats($where: loanFilter) {
+        loans(
           where: $where
         ) {
           items {
             poolId
-            eventType
-            loanAmount
+            status
+            originalAmount
           }
         }
       }
@@ -106,11 +179,11 @@ export class IndexerService {
 
   async queryLoansByPool(poolId: string, limit: number = 20): Promise<any> {
     const query = `
-      query GetLoansByPool($where: loanEventFilter, $limit: Int) {
-        loanEvents(
+      query GetLoansByPool($where: loanFilter, $limit: Int) {
+        loans(
           where: $where,
           limit: $limit,
-          orderBy: "eventTimestamp",
+          orderBy: "createdAt",
           orderDirection: "desc"
         ) {
           items {
@@ -118,11 +191,11 @@ export class IndexerService {
             borrowerAddress
             domainTokenId
             domainName
-            loanAmount
+            originalAmount
             aiScore
             interestRate
-            eventType
-            eventTimestamp
+            status
+            createdAt
             repaymentDeadline
             poolId
             liquidationAttempted
@@ -304,11 +377,11 @@ export class IndexerService {
             borrowerAddress
             domainTokenId
             domainName
-            loanAmount
+            originalAmount
             aiScore
             interestRate
-            eventType
-            eventTimestamp
+            status
+            createdAt
             repaymentDeadline
           }
           domain {
@@ -322,16 +395,16 @@ export class IndexerService {
             firstScoreTimestamp
             lastActivityTimestamp
           }
-          history(orderBy: "eventTimestamp", orderDirection: "asc") {
+          history(orderBy: "createdAt", orderDirection: "asc") {
             items {
               id
               auctionId
-              eventType
+              status
               bidderAddress
               bidAmount
               currentPrice
               finalPrice
-              eventTimestamp
+              createdAt
               blockNumber
               transactionHash
             }
@@ -347,9 +420,9 @@ export class IndexerService {
     const query = `
       query GetUserDashboard($userAddress: String!) {
         # Get user's loans
-        userLoans: loanEvents(
+        userLoans: loans(
           where: { borrowerAddress: $userAddress }
-          orderBy: "eventTimestamp"
+          orderBy: "createdAt"
           orderDirection: "desc"
           limit: 50
         ) {
@@ -358,11 +431,11 @@ export class IndexerService {
             borrowerAddress
             domainTokenId
             domainName
-            loanAmount
+            originalAmount
             aiScore
             interestRate
-            eventType
-            eventTimestamp
+            status
+            createdAt
             repaymentDeadline
             poolId
             liquidationAttempted
@@ -370,26 +443,39 @@ export class IndexerService {
           }
         }
 
-        # Get user's pool events (liquidity provision)
-        userPoolEvents: poolEvents(
-          where: { 
-            OR: [
-              { creatorAddress: $userAddress }
-              { providerAddress: $userAddress }
-            ]
+        # Get user's pools (created pools)
+        userPools: pools(
+          where: { creatorAddress: $userAddress }
+          orderBy: "createdAt"
+          orderDirection: "desc"
+          limit: 20
+        ) {
+          items {
+            id
+            poolId
+            creatorAddress
+            totalLiquidity
+            minAiScore
+            interestRate
+            participantCount
+            status
+            createdAt
+            lastUpdated
           }
+        }
+
+        # Get user's pool history (liquidity provision)
+        userPoolHistory: poolHistorys(
+          where: { providerAddress: $userAddress }
           orderBy: "eventTimestamp"
           orderDirection: "desc"
           limit: 50
         ) {
           items {
             poolId
-            creatorAddress
-            providerAddress
-            minAiScore
-            interestRate
-            liquidityAmount
             eventType
+            providerAddress
+            liquidityAmount
             eventTimestamp
           }
         }
@@ -452,7 +538,7 @@ export class IndexerService {
   async queryUserPoolStats(userAddress: string): Promise<any> {
     const query = `
       query GetUserPoolStats($userAddress: String!) {
-        poolEvents(
+        poolHistorys(
           where: { providerAddress: $userAddress }
         ) {
           items {

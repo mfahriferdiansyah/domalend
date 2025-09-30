@@ -65,6 +65,15 @@ export function usePlaceBid() {
   return useApiMutation(mutationFn);
 }
 
+export function useUserRelatedAuctions(address: string | undefined) {
+  const apiCall = useCallback(async () => {
+    if (!address) throw new Error('Address is required');
+    return domaLendAPI.getUserRelatedAuctions(address);
+  }, [address]);
+
+  return useApi(apiCall, { immediate: !!address });
+}
+
 // Pool hooks
 export function usePools(params?: {
   page?: number;

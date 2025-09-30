@@ -34,3 +34,7 @@ coverage/
 # Temporary files
 .tmp/
 .temp/
+
+# AVS
+avs/
+avs-2/
