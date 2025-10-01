@@ -47,7 +47,7 @@ export const loan = onchainTable(
     duration: t.bigint(), // Loan duration in seconds
     startTime: t.timestamp(), // Loan start timestamp
     poolId: t.text(),
-    status: t.text().notNull().default("active"), // 'active', 'repaid', 'defaulted', 'liquidated'
+    status: t.text().notNull().default("active"), // 'active', 'auctioning', 'sold', 'repaid'
     repaymentDeadline: t.timestamp(),
     liquidationAttempted: t.boolean().notNull().default(false),
     liquidationTxHash: t.text(),

@@ -885,6 +885,13 @@ ponder.on("DutchAuction:AuctionEnded", async ({ event, context }) => {
         lastUpdated: eventTimestamp,
       });
 
+    // Update loan status to sold (auction completed)
+    await context.db.update(loan, { id: loanId.toString() })
+      .set({
+        status: 'sold',
+        lastUpdated: eventTimestamp,
+      });
+
     // Insert into auction history
     await context.db.insert(auctionHistory).values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
@@ -1128,12 +1135,13 @@ ponder.on("LoanManager:CollateralLiquidated", async ({ event, context }) => {
     const existingLoan = await context.db.find(loan, { id: loanId.toString() });
 
     if (existingLoan) {
-      // Update loan status to liquidated
+      // Update loan status to auctioning (collateral going to auction)
       await context.db.update(loan, { id: loanId.toString() })
         .set({
-          status: 'liquidated',
+          status: 'auctioning',
           liquidationAttempted: true,
           liquidationTimestamp: new Date(Number(event.block.timestamp) * 1000),
+          liquidationTxHash: event.transaction.hash,
           lastUpdated: new Date(Number(event.block.timestamp) * 1000),
         });
 
