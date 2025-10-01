@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/AIOracle.sol";
+import "../src/legacy/AIOracle.sol";
 
 contract AIOracleTest is Test {
     AIOracle public oracle;

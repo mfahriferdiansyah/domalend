@@ -1,0 +1,314 @@
+No files changed, compilation skipped
+Traces:
+  [10485009] → new DeployUpgradeableScript@0x9f7cF1d1F558E57ef88a59ac3D47214eF25B6A06
+    └─ ← [Return] 52239 bytes of code
+
+  [11083831] DeployUpgradeableScript::run()
+    ├─ [0] VM::envUint("PRIVATE_KEY") [staticcall]
+    │   └─ ← [Return] <env var value>
+    ├─ [0] VM::addr(<pk>) [staticcall]
+    │   └─ ← [Return] 0xaBA3cF48A81225De43a642ca486C1c069ec11a53
+    ├─ [0] VM::envAddress("USDC_ADDRESS") [staticcall]
+    │   └─ ← [Return] <env var value>
+    ├─ [0] VM::envAddress("DOMA_ADDRESS") [staticcall]
+    │   └─ ← [Return] <env var value>
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("Deploying DomaLend V2 Upgradeable Contracts") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("Deployer:", 0xaBA3cF48A81225De43a642ca486C1c069ec11a53) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("USDC Address:", 0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("Doma Address:", 0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] VM::startBroadcast(<pk>)
+    │   └─ ← [Return] 
+    ├─ [0] console::log("1. Deploying ProxyAdmin...") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [213114] → new ProxyAdmin@0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9
+    │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   └─ ← [Return] 945 bytes of code
+    ├─ [0] console::log("   ProxyAdmin deployed at:", ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("2. Deploying AIOracle (Upgradeable)...") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [1207535] → new AIOracleUpgradeable@0xB5fB366A7973d90ba27033eddb9EA24231f748C9
+    │   ├─ emit Initialized(version: 18446744073709551615 [1.844e19])
+    │   └─ ← [Return] 5915 bytes of code
+    ├─ [0] console::log("   AIOracle Implementation:", AIOracleUpgradeable: [0xB5fB366A7973d90ba27033eddb9EA24231f748C9]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [528286] → new TransparentUpgradeableProxy@0xFF3803da2E2F3Ec8485E855e09898b548b506188
+    │   ├─ emit Upgraded(implementation: AIOracleUpgradeable: [0xB5fB366A7973d90ba27033eddb9EA24231f748C9])
+    │   ├─ [75187] AIOracleUpgradeable::initialize(0xaBA3cF48A81225De43a642ca486C1c069ec11a53) [delegatecall]
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   │   ├─ emit RoleGranted(role: 0x0000000000000000000000000000000000000000000000000000000000000000, account: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53, sender: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   │   ├─ emit Initialized(version: 1)
+    │   │   └─ ← [Stop] 
+    │   ├─ [213114] → new ProxyAdmin@0x729058fba3dA308eF45b99550c60f7342cccA1db
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9])
+    │   │   └─ ← [Return] 945 bytes of code
+    │   ├─ emit AdminChanged(previousAdmin: 0x0000000000000000000000000000000000000000, newAdmin: ProxyAdmin: [0x729058fba3dA308eF45b99550c60f7342cccA1db])
+    │   └─ ← [Return] 796 bytes of code
+    ├─ [0] console::log("   AIOracle Proxy:", TransparentUpgradeableProxy: [0xFF3803da2E2F3Ec8485E855e09898b548b506188]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("3. Deploying SatoruLending (Upgradeable)...") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [2515799] → new SatoruLendingUpgradeable@0xE1685368816C97E5Fc4B3C72423FC08A6AE91642
+    │   ├─ emit Initialized(version: 18446744073709551615 [1.844e19])
+    │   └─ ← [Return] 12449 bytes of code
+    ├─ [0] console::log("   SatoruLending Implementation:", SatoruLendingUpgradeable: [0xE1685368816C97E5Fc4B3C72423FC08A6AE91642]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [635292] → new TransparentUpgradeableProxy@0xD5695a0700552c1FA747cc029a60cdB27373CE26
+    │   ├─ emit Upgraded(implementation: SatoruLendingUpgradeable: [0xE1685368816C97E5Fc4B3C72423FC08A6AE91642])
+    │   ├─ [181925] SatoruLendingUpgradeable::initialize(0xaBA3cF48A81225De43a642ca486C1c069ec11a53, 0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B, 0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f, TransparentUpgradeableProxy: [0xFF3803da2E2F3Ec8485E855e09898b548b506188]) [delegatecall]
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   │   ├─ emit Initialized(version: 1)
+    │   │   └─ ← [Stop] 
+    │   ├─ [213114] → new ProxyAdmin@0x3aa598292244e7F3F97e2c8e6a95F8977E3974E8
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9])
+    │   │   └─ ← [Return] 945 bytes of code
+    │   ├─ emit AdminChanged(previousAdmin: 0x0000000000000000000000000000000000000000, newAdmin: ProxyAdmin: [0x3aa598292244e7F3F97e2c8e6a95F8977E3974E8])
+    │   └─ ← [Return] 796 bytes of code
+    ├─ [0] console::log("   SatoruLending Proxy:", TransparentUpgradeableProxy: [0xD5695a0700552c1FA747cc029a60cdB27373CE26]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("4. Deploying LoanManager (Upgradeable)...") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [2350404] → new LoanManagerUpgradeable@0xE22699af9a79A7F6aa7885688b5122A9A84b68bC
+    │   ├─ emit Initialized(version: 18446744073709551615 [1.844e19])
+    │   └─ ← [Return] 11623 bytes of code
+    ├─ [0] console::log("   LoanManager Implementation:", LoanManagerUpgradeable: [0xE22699af9a79A7F6aa7885688b5122A9A84b68bC]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [613264] → new TransparentUpgradeableProxy@0x45D8F12329890Cd325FE05601F8E451d0b6B9D42
+    │   ├─ emit Upgraded(implementation: LoanManagerUpgradeable: [0xE22699af9a79A7F6aa7885688b5122A9A84b68bC])
+    │   ├─ [159897] LoanManagerUpgradeable::initialize(0xaBA3cF48A81225De43a642ca486C1c069ec11a53, 0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B, 0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f, TransparentUpgradeableProxy: [0xD5695a0700552c1FA747cc029a60cdB27373CE26]) [delegatecall]
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   │   ├─ emit Initialized(version: 1)
+    │   │   └─ ← [Return] 
+    │   ├─ [213114] → new ProxyAdmin@0xA72fB34cCa92c4Aa0C174dCd09293f5E21E93d48
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9])
+    │   │   └─ ← [Return] 945 bytes of code
+    │   ├─ emit AdminChanged(previousAdmin: 0x0000000000000000000000000000000000000000, newAdmin: ProxyAdmin: [0xA72fB34cCa92c4Aa0C174dCd09293f5E21E93d48])
+    │   └─ ← [Return] 796 bytes of code
+    ├─ [0] console::log("   LoanManager Proxy:", TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("5. Deploying DutchAuction (Upgradeable)...") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [1916307] → new DutchAuctionUpgradeable@0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD
+    │   ├─ emit Initialized(version: 18446744073709551615 [1.844e19])
+    │   └─ ← [Return] 9455 bytes of code
+    ├─ [0] console::log("   DutchAuction Implementation:", DutchAuctionUpgradeable: [0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [634801] → new TransparentUpgradeableProxy@0xe6e20d2d356565614BCb6150350c1dfC9F653f36
+    │   ├─ emit Upgraded(implementation: DutchAuctionUpgradeable: [0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD])
+    │   ├─ [181344] DutchAuctionUpgradeable::initialize(0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B, 0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f, TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42], TransparentUpgradeableProxy: [0xFF3803da2E2F3Ec8485E855e09898b548b506188], 0xaBA3cF48A81225De43a642ca486C1c069ec11a53) [delegatecall]
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   │   ├─ emit Initialized(version: 1)
+    │   │   └─ ← [Stop] 
+    │   ├─ [213114] → new ProxyAdmin@0x86451c0b22809a26255032107f803FAbb3c4C79d
+    │   │   ├─ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9])
+    │   │   └─ ← [Return] 945 bytes of code
+    │   ├─ emit AdminChanged(previousAdmin: 0x0000000000000000000000000000000000000000, newAdmin: ProxyAdmin: [0x86451c0b22809a26255032107f803FAbb3c4C79d])
+    │   └─ ← [Return] 796 bytes of code
+    ├─ [0] console::log("   DutchAuction Proxy:", TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("6. Configuring contract connections...") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [23173] TransparentUpgradeableProxy::fallback(TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42])
+    │   ├─ [22841] SatoruLendingUpgradeable::setLoanManager(TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42]) [delegatecall]
+    │   │   └─ ← [Stop] 
+    │   └─ ← [Return] 
+    ├─ [0] console::log("   SatoruLending -> LoanManager connected") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [24511] TransparentUpgradeableProxy::fallback(TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36])
+    │   ├─ [24179] LoanManagerUpgradeable::setDutchAuction(TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36]) [delegatecall]
+    │   │   ├─ emit DutchAuctionUpdated(oldAuction: 0x0000000000000000000000000000000000000000, newAuction: TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36])
+    │   │   └─ ← [Return] 
+    │   └─ ← [Return] 
+    ├─ [0] console::log("   LoanManager -> DutchAuction connected") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [48224] TransparentUpgradeableProxy::fallback(0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   ├─ [47892] AIOracleUpgradeable::setBackendService(0xaBA3cF48A81225De43a642ca486C1c069ec11a53) [delegatecall]
+    │   │   ├─ emit RoleGranted(role: 0xcab1cf03737a5151eda03b61bb1b11de97d79b7868ada0e5dff286a9ca3dc998, account: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53, sender: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53)
+    │   │   ├─ emit BackendServiceUpdated(oldService: 0x0000000000000000000000000000000000000000, newService: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53, updatedBy: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53, timestamp: 1759292298 [1.759e9])
+    │   │   └─ ← [Stop] 
+    │   └─ ← [Return] 
+    ├─ [0] console::log("   AIOracle backend service set") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] VM::stopBroadcast()
+    │   └─ ← [Return] 
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("DEPLOYMENT COMPLETE - UPGRADEABLE CONTRACTS") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("ProxyAdmin:               ", ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("AIOracle:") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Implementation:       ", AIOracleUpgradeable: [0xB5fB366A7973d90ba27033eddb9EA24231f748C9]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Proxy:                ", TransparentUpgradeableProxy: [0xFF3803da2E2F3Ec8485E855e09898b548b506188]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("SatoruLending:") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Implementation:       ", SatoruLendingUpgradeable: [0xE1685368816C97E5Fc4B3C72423FC08A6AE91642]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Proxy:                ", TransparentUpgradeableProxy: [0xD5695a0700552c1FA747cc029a60cdB27373CE26]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("LoanManager:") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Implementation:       ", LoanManagerUpgradeable: [0xE22699af9a79A7F6aa7885688b5122A9A84b68bC]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Proxy:                ", TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("DutchAuction:") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Implementation:       ", DutchAuctionUpgradeable: [0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("  - Proxy:                ", TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("USAGE ADDRESSES (Use proxy addresses):") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("AIOracle:                 ", TransparentUpgradeableProxy: [0xFF3803da2E2F3Ec8485E855e09898b548b506188]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("SatoruLending:            ", TransparentUpgradeableProxy: [0xD5695a0700552c1FA747cc029a60cdB27373CE26]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("LoanManager:              ", TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("DutchAuction:             ", TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36]) [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("========================================") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("NOTE: Always interact with PROXY addresses, not implementations!") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("ProxyAdmin controls all upgrades - only owner can upgrade") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] console::log("") [staticcall]
+    │   └─ ← [Stop] 
+    ├─ [0] VM::toString(ProxyAdmin: [0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9]) [staticcall]
+    │   └─ ← [Return] "0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9"
+    ├─ [0] VM::toString(AIOracleUpgradeable: [0xB5fB366A7973d90ba27033eddb9EA24231f748C9]) [staticcall]
+    │   └─ ← [Return] "0xB5fB366A7973d90ba27033eddb9EA24231f748C9"
+    ├─ [0] VM::toString(TransparentUpgradeableProxy: [0xFF3803da2E2F3Ec8485E855e09898b548b506188]) [staticcall]
+    │   └─ ← [Return] "0xFF3803da2E2F3Ec8485E855e09898b548b506188"
+    ├─ [0] VM::toString(SatoruLendingUpgradeable: [0xE1685368816C97E5Fc4B3C72423FC08A6AE91642]) [staticcall]
+    │   └─ ← [Return] "0xE1685368816C97E5Fc4B3C72423FC08A6AE91642"
+    ├─ [0] VM::toString(TransparentUpgradeableProxy: [0xD5695a0700552c1FA747cc029a60cdB27373CE26]) [staticcall]
+    │   └─ ← [Return] "0xD5695a0700552c1FA747cc029a60cdB27373CE26"
+    ├─ [0] VM::toString(LoanManagerUpgradeable: [0xE22699af9a79A7F6aa7885688b5122A9A84b68bC]) [staticcall]
+    │   └─ ← [Return] "0xE22699af9a79A7F6aa7885688b5122A9A84b68bC"
+    ├─ [0] VM::toString(TransparentUpgradeableProxy: [0x45D8F12329890Cd325FE05601F8E451d0b6B9D42]) [staticcall]
+    │   └─ ← [Return] "0x45D8F12329890Cd325FE05601F8E451d0b6B9D42"
+    ├─ [0] VM::toString(DutchAuctionUpgradeable: [0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD]) [staticcall]
+    │   └─ ← [Return] "0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD"
+    ├─ [0] VM::toString(TransparentUpgradeableProxy: [0xe6e20d2d356565614BCb6150350c1dfC9F653f36]) [staticcall]
+    │   └─ ← [Return] "0xe6e20d2d356565614BCb6150350c1dfC9F653f36"
+    ├─ [0] VM::writeFile("./deployment-upgradeable.json", "{\n  \"proxyAdmin\": \"0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9\",\n  \"aiOracle\": {\n    \"implementation\": \"0xB5fB366A7973d90ba27033eddb9EA24231f748C9\",\n    \"proxy\": \"0xFF3803da2E2F3Ec8485E855e09898b548b506188\"\n  },\n  \"satoruLending\": {\n    \"implementation\": \"0xE1685368816C97E5Fc4B3C72423FC08A6AE91642\",\n    \"proxy\": \"0xD5695a0700552c1FA747cc029a60cdB27373CE26\"\n  },\n  \"loanManager\": {\n    \"implementation\": \"0xE22699af9a79A7F6aa7885688b5122A9A84b68bC\",\n    \"proxy\": \"0x45D8F12329890Cd325FE05601F8E451d0b6B9D42\"\n  },\n  \"dutchAuction\": {\n    \"implementation\": \"0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD\",\n    \"proxy\": \"0xe6e20d2d356565614BCb6150350c1dfC9F653f36\"\n  }\n}")
+    │   └─ ← [Revert] vm.writeFile: the path deployment-upgradeable.json is not allowed to be accessed for write operations
+    └─ ← [Revert] vm.writeFile: the path deployment-upgradeable.json is not allowed to be accessed for write operations
+
+
+
+== Logs ==
+  ========================================
+  Deploying DomaLend V2 Upgradeable Contracts
+  ========================================
+  Deployer: 0xaBA3cF48A81225De43a642ca486C1c069ec11a53
+  USDC Address: 0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B
+  Doma Address: 0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f
+  
+  1. Deploying ProxyAdmin...
+     ProxyAdmin deployed at: 0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9
+  
+  2. Deploying AIOracle (Upgradeable)...
+     AIOracle Implementation: 0xB5fB366A7973d90ba27033eddb9EA24231f748C9
+     AIOracle Proxy: 0xFF3803da2E2F3Ec8485E855e09898b548b506188
+  
+  3. Deploying SatoruLending (Upgradeable)...
+     SatoruLending Implementation: 0xE1685368816C97E5Fc4B3C72423FC08A6AE91642
+     SatoruLending Proxy: 0xD5695a0700552c1FA747cc029a60cdB27373CE26
+  
+  4. Deploying LoanManager (Upgradeable)...
+     LoanManager Implementation: 0xE22699af9a79A7F6aa7885688b5122A9A84b68bC
+     LoanManager Proxy: 0x45D8F12329890Cd325FE05601F8E451d0b6B9D42
+  
+  5. Deploying DutchAuction (Upgradeable)...
+     DutchAuction Implementation: 0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD
+     DutchAuction Proxy: 0xe6e20d2d356565614BCb6150350c1dfC9F653f36
+  
+  6. Configuring contract connections...
+     SatoruLending -> LoanManager connected
+     LoanManager -> DutchAuction connected
+     AIOracle backend service set
+  
+  ========================================
+  DEPLOYMENT COMPLETE - UPGRADEABLE CONTRACTS
+  ========================================
+  
+  ProxyAdmin:                0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9
+  
+  AIOracle:
+    - Implementation:        0xB5fB366A7973d90ba27033eddb9EA24231f748C9
+    - Proxy:                 0xFF3803da2E2F3Ec8485E855e09898b548b506188
+  
+  SatoruLending:
+    - Implementation:        0xE1685368816C97E5Fc4B3C72423FC08A6AE91642
+    - Proxy:                 0xD5695a0700552c1FA747cc029a60cdB27373CE26
+  
+  LoanManager:
+    - Implementation:        0xE22699af9a79A7F6aa7885688b5122A9A84b68bC
+    - Proxy:                 0x45D8F12329890Cd325FE05601F8E451d0b6B9D42
+  
+  DutchAuction:
+    - Implementation:        0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD
+    - Proxy:                 0xe6e20d2d356565614BCb6150350c1dfC9F653f36
+  
+  ========================================
+  USAGE ADDRESSES (Use proxy addresses):
+  ========================================
+  AIOracle:                  0xFF3803da2E2F3Ec8485E855e09898b548b506188
+  SatoruLending:             0xD5695a0700552c1FA747cc029a60cdB27373CE26
+  LoanManager:               0x45D8F12329890Cd325FE05601F8E451d0b6B9D42
+  DutchAuction:              0xe6e20d2d356565614BCb6150350c1dfC9F653f36
+  ========================================
+  
+  NOTE: Always interact with PROXY addresses, not implementations!
+  ProxyAdmin controls all upgrades - only owner can upgrade
+  
+Error: script failed: vm.writeFile: the path deployment-upgradeable.json is not allowed to be accessed for write operations

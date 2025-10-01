@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/LoanManager.sol";
+import "../src/legacy/LoanManager.sol";
 import "../src/interfaces/ILoanManager.sol";
 
 contract MockUSDC is IERC20 {

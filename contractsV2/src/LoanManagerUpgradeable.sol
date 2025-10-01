@@ -4,19 +4,21 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/ISatoruLending.sol";
 import "./interfaces/IDutchAuction.sol";
 import "./interfaces/ILoanManager.sol";
 
-contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
+contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, ILoanManager {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable usdc;
-    IDoma public immutable domaProtocol;
-    ISatoruLending public immutable satoruLending;
+    // Changed from immutable to storage variables
+    IERC20 public usdc;
+    IDoma public domaProtocol;
+    ISatoruLending public satoruLending;
     IDutchAuction public dutchAuction;
 
     struct Loan {
@@ -41,7 +43,7 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
     mapping(uint256 => bool) public lockedDomains;
     mapping(address => uint256[]) public userLoans;
     mapping(address => uint256[]) public lenderLoans;
-    uint256 public nextLoanId = 1;
+    uint256 public nextLoanId;
 
     mapping(uint256 => uint256) public loanToAuction;
     mapping(uint256 => uint256) public auctionToLoan;
@@ -51,13 +53,8 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
     uint256 public totalLoansLiquidated;
     uint256 public totalInterestPaid;
 
-    // NOTE: ULTRA-SHORT for testing liquidation - production should use 1 days
-    // Grace period after loan expiry before permissionless liquidation can be triggered
     uint256 public constant LIQUIDATION_BUFFER = 10 seconds;
     uint256 public constant MAX_REPAYMENT_SLIPPAGE = 500;
-
-    // NOTE: For testing purposes - tolerance period equivalent to 10 minutes of interest
-    // Production should use smaller value like 1 minute
     uint256 public constant REPAYMENT_TOLERANCE_MINUTES = 10;
     uint256 public constant SECONDS_PER_YEAR = 365 days;
 
@@ -152,15 +149,25 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         _;
     }
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address initialOwner,
         address _usdc,
         address _domaProtocol,
         address _satoruLending
-    ) Ownable(initialOwner) {
+    ) public initializer {
+        __Ownable_init(initialOwner);
+        __ReentrancyGuard_init();
+
         usdc = IERC20(_usdc);
         domaProtocol = IDoma(_domaProtocol);
         satoruLending = ISatoruLending(_satoruLending);
+
+        nextLoanId = 1;
     }
 
     function setDutchAuction(address _dutchAuction) external onlyOwner {
@@ -189,7 +196,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         loan.poolId = params.poolId;
         loan.isActive = true;
 
-        // Get pool creator from SatoruLending
         (address creator,,,,,,) = satoruLending.getPoolInfo(params.poolId);
         loan.poolCreator = creator;
 
@@ -233,7 +239,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         loan.requestId = params.requestId;
         loan.isActive = true;
 
-        // Set up crowdfunded loan data
         loan.lenders = loanData.contributors;
         for (uint256 i = 0; i < loanData.contributors.length; i++) {
             loan.lenderShares[loanData.contributors[i]] = loanData.contributions[i];
@@ -307,10 +312,8 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
             overpayment = repaymentAmount - remainingBalance;
         }
 
-        // Transfer full repayment from borrower first
         usdc.safeTransferFrom(msg.sender, address(this), repaymentAmount);
 
-        // Refund overpayment if any
         if (overpayment > 0) {
             usdc.safeTransfer(msg.sender, overpayment);
         }
@@ -318,11 +321,9 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         loan.amountRepaid += actualRepayment;
         remainingBalance = loan.totalOwed - loan.amountRepaid;
 
-        // Consider loan fully repaid if within tolerance threshold (for small interest calculation discrepancies)
         uint256 tolerance = calculateRepaymentTolerance(loanId);
         bool isFullyRepaid = remainingBalance == 0 || remainingBalance <= tolerance;
 
-        // Distribute repayment
         (address[] memory recipients, uint256[] memory amounts) = _distributeRepayment(loanId, actualRepayment);
 
         totalInterestPaid += actualRepayment;
@@ -341,7 +342,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         if (isFullyRepaid) {
             loan.isActive = false;
             totalLoansRepaid++;
-            // Auto-release collateral
             lockedDomains[loan.domainTokenId] = false;
             domaProtocol.transferFrom(address(this), loan.borrower, loan.domainTokenId);
 
@@ -363,9 +363,8 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         loan.isLiquidated = true;
         loan.isActive = false;
 
-        // Start Dutch auction - get AI score for domain
-        uint256 aiScore = 75; // Default score - in practice would get from AIOracle
-        string memory domainName = "defaultdomain.eth"; // Default name - in practice would get from Doma
+        uint256 aiScore = 75;
+        string memory domainName = "defaultdomain.eth";
 
         IDutchAuction.StartAuctionParams memory auctionParams = IDutchAuction.StartAuctionParams({
             loanId: loanId,
@@ -376,7 +375,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
             domainName: domainName
         });
 
-        // Approve DutchAuction to transfer the domain NFT
         domaProtocol.approve(address(dutchAuction), loan.domainTokenId);
 
         auctionId = dutchAuction.startAuction(auctionParams);
@@ -392,7 +390,7 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
             loan.borrower,
             loan.totalOwed,
             auctionId,
-            loan.totalOwed * 2 // starting price is 2x total owed
+            loan.totalOwed * 2
         );
 
         emit LoanClosed(loanId, loan.borrower, false, true, block.timestamp);
@@ -425,8 +423,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         (address[] memory recipients, uint256[] memory amounts, uint256 surplus) =
             _distributeAuctionProceeds(loanId, salePrice);
 
-        // Domain already transferred by Dutch auction to winner
-        // Just update our tracking
         lockedDomains[loan.domainTokenId] = false;
 
         emit AuctionProceedsDistributed(auctionId, loanId, salePrice, recipients, amounts, surplus);
@@ -437,7 +433,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         pure
         returns (uint256)
     {
-        // Simple interest: principal * (1 + rate * time)
         uint256 interest = (principal * interestRate * duration) / (10000 * SECONDS_PER_YEAR);
         return principal + interest;
     }
@@ -449,7 +444,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         Loan storage loan = loans[loanId];
 
         if (loan.poolId != 0) {
-            // Pool-based loan - return to SatoruLending
             recipients = new address[](1);
             amounts = new uint256[](1);
             recipients[0] = address(satoruLending);
@@ -457,7 +451,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
 
             usdc.safeTransfer(address(satoruLending), amount);
         } else {
-            // Crowdfunded loan - distribute proportionally
             recipients = new address[](loan.lenders.length);
             amounts = new uint256[](loan.lenders.length);
 
@@ -480,9 +473,7 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         if (salePrice >= totalOwed) {
             surplus = salePrice - totalOwed;
 
-            // Distribute totalOwed to lenders, surplus to borrower
             if (loan.poolId != 0) {
-                // Pool-based loan
                 recipients = new address[](surplus > 0 ? 2 : 1);
                 amounts = new uint256[](surplus > 0 ? 2 : 1);
 
@@ -496,7 +487,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
                     usdc.safeTransfer(loan.borrower, surplus);
                 }
             } else {
-                // Crowdfunded loan
                 uint256 recipientCount = loan.lenders.length + (surplus > 0 ? 1 : 0);
                 recipients = new address[](recipientCount);
                 amounts = new uint256[](recipientCount);
@@ -515,7 +505,6 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
                 }
             }
         } else {
-            // Sale price less than owed - distribute proportionally
             surplus = 0;
 
             if (loan.poolId != 0) {
@@ -588,20 +577,12 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
         remainingBalance = loan.totalOwed - loan.amountRepaid;
     }
 
-    /**
-     * @notice Calculate repayment tolerance based on N minutes of interest
-     * @param loanId The loan ID to calculate tolerance for
-     * @return tolerance amount in USDC (6 decimals)
-     */
     function calculateRepaymentTolerance(uint256 loanId) public view returns (uint256) {
         Loan storage loan = loans[loanId];
 
-        // Calculate: (principalAmount * interestRate * toleranceMinutes) / (365 days * 10000)
-        // interestRate is in basis points (10000 = 100%), toleranceMinutes in minutes
         uint256 toleranceSeconds = REPAYMENT_TOLERANCE_MINUTES * 60;
         uint256 annualizedTolerance = (loan.principalAmount * loan.interestRate * toleranceSeconds) / (SECONDS_PER_YEAR * 10000);
 
-        // Minimum tolerance of 1000 wei (0.001 USDC) to handle very small loans
         return annualizedTolerance > 1000 ? annualizedTolerance : 1000;
     }
 
@@ -631,4 +612,9 @@ contract LoanManager is Ownable, ReentrancyGuard, ILoanManager {
             active
         );
     }
+
+    /**
+     * @dev Storage gap for future upgrades
+     */
+    uint256[50] private __gap;
 }

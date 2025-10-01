@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/SatoruLending.sol";
-import "../src/AIOracle.sol";
+import "../src/legacy/SatoruLending.sol";
+import "../src/legacy/AIOracle.sol";
 
 contract MockUSDC is IERC20 {
     mapping(address => uint256) private _balances;
