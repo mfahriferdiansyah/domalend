@@ -462,7 +462,7 @@ ponder.on("SatoruLending:InstantLoanExecuted", async ({ event, context }) => {
  * POOL MANAGEMENT: Track liquidity pool lifecycle
  */
 ponder.on("SatoruLending:PoolCreated", async ({ event, context }) => {
-  const { poolId, creator, initialLiquidity, minAiScore, interestRate } = event.args;
+  const { poolId, creator, initialLiquidity, minAiScore, interestRate, maxDomainExpiration, minLoanAmount, maxLoanAmount, minDuration, maxDuration, allowAdditionalProviders } = event.args;
 
   console.log(`🏦 [SatoruLending] Pool created: ${poolId} by ${creator} with ${initialLiquidity} liquidity`);
 
@@ -477,7 +477,13 @@ ponder.on("SatoruLending:PoolCreated", async ({ event, context }) => {
       totalLiquidity: initialLiquidity.toString(),
       availableLiquidity: initialLiquidity.toString(),
       minAiScore: Number(minAiScore),
+      maxDomainExpiration: maxDomainExpiration,
       interestRate: Number(interestRate),
+      minLoanAmount: minLoanAmount.toString(),
+      maxLoanAmount: maxLoanAmount.toString(),
+      minDuration: minDuration,
+      maxDuration: maxDuration,
+      allowAdditionalProviders: allowAdditionalProviders,
       participantCount: 1,
       status: 'active',
       createdAt: timestamp,
@@ -787,8 +793,11 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
       aiScore: existingLoan?.aiScore,
       startingPrice: startingPrice.toString(),
       currentPrice: startingPrice.toString(),
+      reservePrice: reservePrice.toString(),
+      loanAmount: existingLoan?.originalAmount,
       status: 'active',
       startedAt: timestamp,
+      endTimestamp: new Date(Number(endTimestamp) * 1000),
       lastUpdated: timestamp,
       createdAt: timestamp,
       blockNumber: event.block.number,
@@ -873,6 +882,13 @@ ponder.on("DutchAuction:AuctionEnded", async ({ event, context }) => {
         status: 'ended',
         recoveryRate,
         endedAt: eventTimestamp,
+        lastUpdated: eventTimestamp,
+      });
+
+    // Update loan status to sold (auction completed)
+    await context.db.update(loan, { id: loanId.toString() })
+      .set({
+        status: 'sold',
         lastUpdated: eventTimestamp,
       });
 
@@ -988,9 +1004,12 @@ ponder.on("LoanManager:LoanCreated", async ({ event, context }) => {
       domainTokenId: domainTokenId.toString(),
       domainName,
       originalAmount: principalAmount.toString(),
+      totalOwed: totalOwed.toString(),
       currentBalance: principalAmount.toString(),
       totalRepaid: "0",
       interestRate: Number(interestRate),
+      duration: duration,
+      startTime: timestamp,
       poolId: poolId ? poolId.toString() : undefined,
       status: 'active',
       repaymentDeadline: new Date(Number(dueDate) * 1000),
@@ -1116,12 +1135,13 @@ ponder.on("LoanManager:CollateralLiquidated", async ({ event, context }) => {
     const existingLoan = await context.db.find(loan, { id: loanId.toString() });
 
     if (existingLoan) {
-      // Update loan status to liquidated
+      // Update loan status to auctioning (collateral going to auction)
       await context.db.update(loan, { id: loanId.toString() })
         .set({
-          status: 'liquidated',
+          status: 'auctioning',
           liquidationAttempted: true,
           liquidationTimestamp: new Date(Number(event.block.timestamp) * 1000),
+          liquidationTxHash: event.transaction.hash,
           lastUpdated: new Date(Number(event.block.timestamp) * 1000),
         });
 

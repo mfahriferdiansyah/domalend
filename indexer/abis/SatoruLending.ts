@@ -27,6 +27,12 @@ export const SatoruLending_ABI = [
       { name: 'minAiScore', type: 'uint256', indexed: false },
       { name: 'interestRate', type: 'uint256', indexed: false },
       { name: 'timestamp', type: 'uint256', indexed: false },
+      { name: 'maxDomainExpiration', type: 'uint256', indexed: false },
+      { name: 'minLoanAmount', type: 'uint256', indexed: false },
+      { name: 'maxLoanAmount', type: 'uint256', indexed: false },
+      { name: 'minDuration', type: 'uint256', indexed: false },
+      { name: 'maxDuration', type: 'uint256', indexed: false },
+      { name: 'allowAdditionalProviders', type: 'bool', indexed: false },
     ],
   },
   {

@@ -4,19 +4,24 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/IAIOracle.sol";
 import "./interfaces/ILoanManager.sol";
 
-contract SatoruLending is Ownable, ReentrancyGuard {
+contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable usdc;
-    IDoma public immutable domaProtocol;
-    IAIOracle public immutable aiOracle;
+    string public constant VERSION = "3.0.0";
+
+    // Changed from immutable to storage variables
+    IERC20 public usdc;
+    IDoma public domaProtocol;
+    IAIOracle public aiOracle;
     ILoanManager public loanManager;
 
     struct LiquidityPool {
@@ -39,7 +44,7 @@ contract SatoruLending is Ownable, ReentrancyGuard {
     }
 
     mapping(uint256 => LiquidityPool) public pools;
-    uint256 public nextPoolId = 1;
+    uint256 public nextPoolId;
 
     struct LoanRequest {
         address borrower;
@@ -59,7 +64,7 @@ contract SatoruLending is Ownable, ReentrancyGuard {
     }
 
     mapping(uint256 => LoanRequest) public loanRequests;
-    uint256 public nextRequestId = 1;
+    uint256 public nextRequestId;
 
     uint256 public totalPoolsCreated;
     uint256 public totalLiquidityProvided;
@@ -67,13 +72,13 @@ contract SatoruLending is Ownable, ReentrancyGuard {
     uint256 public totalVolumeProcessed;
 
     // Removed artificial restrictions - let pool creators and market decide
-    uint256 public constant MAX_INTEREST_RATE = type(uint256).max; // No cap - market decides
-    uint256 public constant MIN_CAMPAIGN_DURATION = 1; // 1 second minimum
-    uint256 public constant MAX_CAMPAIGN_DURATION = type(uint256).max; // No cap
-    uint256 public constant MIN_LOAN_DURATION = 1; // 1 second minimum
-    uint256 public constant MAX_LOAN_DURATION = type(uint256).max; // No cap
-    uint256 public constant MIN_POOL_LIQUIDITY = 1; // 1 wei minimum
-    uint256 public constant MAX_POOLS_PER_USER = type(uint256).max; // No limit
+    uint256 public constant MAX_INTEREST_RATE = type(uint256).max;
+    uint256 public constant MIN_CAMPAIGN_DURATION = 1;
+    uint256 public constant MAX_CAMPAIGN_DURATION = type(uint256).max;
+    uint256 public constant MIN_LOAN_DURATION = 1;
+    uint256 public constant MAX_LOAN_DURATION = type(uint256).max;
+    uint256 public constant MIN_POOL_LIQUIDITY = 1;
+    uint256 public constant MAX_POOLS_PER_USER = type(uint256).max;
 
     struct CreatePoolParams {
         uint256 initialLiquidity;
@@ -108,7 +113,13 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         uint256 initialLiquidity,
         uint256 minAiScore,
         uint256 interestRate,
-        uint256 timestamp
+        uint256 timestamp,
+        uint256 maxDomainExpiration,
+        uint256 minLoanAmount,
+        uint256 maxLoanAmount,
+        uint256 minDuration,
+        uint256 maxDuration,
+        bool allowAdditionalProviders
     );
 
     event LiquidityAdded(
@@ -183,16 +194,30 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         string reason
     );
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address initialOwner,
         address _usdc,
         address _domaProtocol,
         address _aiOracle
-    ) Ownable(initialOwner) {
+    ) public initializer {
+        __Ownable_init(initialOwner);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
+
         usdc = IERC20(_usdc);
         domaProtocol = IDoma(_domaProtocol);
         aiOracle = IAIOracle(_aiOracle);
+
+        nextPoolId = 1;
+        nextRequestId = 1;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function setLoanManager(address _loanManager) external onlyOwner {
         loanManager = ILoanManager(_loanManager);
@@ -203,7 +228,6 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         nonReentrant
         returns (uint256 poolId)
     {
-        // Keep only logical safety guards, remove artificial restrictions
         require(params.initialLiquidity > 0, "Initial liquidity cannot be zero");
         require(params.minLoanAmount < params.maxLoanAmount, "Invalid loan amount range");
         require(params.minDuration > 0, "Duration cannot be zero");
@@ -239,7 +263,13 @@ contract SatoruLending is Ownable, ReentrancyGuard {
             params.initialLiquidity,
             params.minAiScore,
             params.interestRate,
-            block.timestamp
+            block.timestamp,
+            params.maxDomainExpiration,
+            params.minLoanAmount,
+            params.maxLoanAmount,
+            params.minDuration,
+            params.maxDuration,
+            params.allowAdditionalProviders
         );
     }
 
@@ -355,18 +385,14 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         nonReentrant
         returns (uint256 requestId)
     {
-        // Keep only logical safety guards, remove artificial restrictions
         require(params.campaignDuration > 0, "Campaign duration cannot be zero");
         require(params.requestedAmount > 0, "Requested amount cannot be zero");
 
-        // Calculate campaign deadline
         uint256 campaignDeadline = block.timestamp + params.campaignDuration;
 
-        // Validate repayment deadline is not in the past
         require(params.repaymentDeadline > block.timestamp,
             "INVALID_TIMELINE: Repayment deadline cannot be in the past");
 
-        // CRITICAL: Ensure repayment deadline is after campaign deadline to prevent underflow
         require(params.repaymentDeadline > campaignDeadline,
             string(abi.encodePacked(
                 "INVALID_TIMELINE: Repayment deadline (",
@@ -377,7 +403,6 @@ contract SatoruLending is Ownable, ReentrancyGuard {
                 Strings.toString(block.timestamp)
             )));
 
-        // Sanity check: Ensure minimum loan duration (1 second for testing)
         require(params.repaymentDeadline >= campaignDeadline + MIN_LOAN_DURATION,
             "INVALID_TIMELINE: Minimum loan duration required");
 
@@ -421,41 +446,30 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         require(block.timestamp < request.campaignDeadline, "Campaign expired");
         require(amount > 0, "Amount must be positive");
 
-        // Check if already fully funded before any calculations
         if (request.totalFunded >= request.requestedAmount) {
             revert("Loan request already fully funded");
         }
 
-        // Calculate remaining amount needed with overflow protection
         uint256 remainingAmount = request.requestedAmount - request.totalFunded;
-
-        // Cap the amount to what's actually needed
         uint256 actualAmount = amount > remainingAmount ? remainingAmount : amount;
 
-        // Additional safety check
         require(actualAmount > 0, "No funding needed");
         require(actualAmount <= remainingAmount, "Amount exceeds remaining");
 
-        // Track new contributor
         if (request.contributions[msg.sender] == 0) {
             request.contributors.push(msg.sender);
         }
 
-        // Update contribution tracking BEFORE totalFunded to ensure consistency
         request.contributions[msg.sender] += actualAmount;
 
-        // Update total funded with overflow check
         uint256 newTotalFunded = request.totalFunded + actualAmount;
         require(newTotalFunded <= request.requestedAmount, "Total funding would exceed requested amount");
         request.totalFunded = newTotalFunded;
 
-        // Transfer funds after all state updates
         usdc.safeTransferFrom(msg.sender, address(this), actualAmount);
 
-        // Check if fully funded
         bool isFullyFunded = request.totalFunded == request.requestedAmount;
 
-        // Calculate remaining amount safely for emission
         uint256 remainingAmountForEmit = 0;
         if (!isFullyFunded) {
             remainingAmountForEmit = request.requestedAmount - request.totalFunded;
@@ -470,7 +484,6 @@ contract SatoruLending is Ownable, ReentrancyGuard {
             isFullyFunded
         );
 
-        // Execute loan if fully funded
         if (isFullyFunded) {
             _executeLoanRequest(requestId);
         }
@@ -501,7 +514,6 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         uint256 minRequiredAmount = (request.requestedAmount * minThresholdBps) / 10000;
         require(request.totalFunded >= minRequiredAmount, "Funding below minimum threshold");
 
-        // Update the requested amount to the funded amount for execution
         request.requestedAmount = request.totalFunded;
 
         return _executeLoanRequest(requestId);
@@ -543,7 +555,6 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         request.contributions[msg.sender] = 0;
         request.totalFunded -= refundAmount;
 
-        // If this was the last contributor, mark the request as cancelled
         bool hasRemainingContributions = false;
         for (uint256 i = 0; i < request.contributors.length; i++) {
             if (request.contributions[request.contributors[i]] > 0) {
@@ -632,7 +643,7 @@ contract SatoruLending is Ownable, ReentrancyGuard {
     {
         LiquidityPool storage pool = pools[poolId];
         if (pool.totalLiquidity == 0) {
-            return 10000; // 100% for first provider
+            return 10000;
         }
         return (newLiquidity * 10000) / pool.totalLiquidity;
     }
@@ -683,14 +694,12 @@ contract SatoruLending is Ownable, ReentrancyGuard {
         LoanRequest storage request = loanRequests[requestId];
         require(!request.isExecuted, "Already executed");
 
-        // CRITICAL: Double-check deadline ordering to prevent underflow with clear error message
         require(request.repaymentDeadline > request.campaignDeadline,
             "UNDERFLOW_PREVENTION: Repayment deadline must be after campaign deadline");
 
         request.isExecuted = true;
         request.isActive = false;
 
-        // Calculate duration safely after validation
         uint256 loanDuration = request.repaymentDeadline - request.campaignDeadline;
 
         ILoanManager.CreateLoanParams memory loanParams = ILoanManager.CreateLoanParams({
@@ -767,7 +776,14 @@ contract SatoruLending is Ownable, ReentrancyGuard {
             uint256 minAiScore,
             uint256 interestRate,
             bool isActive,
-            uint256 totalLoansIssued
+            uint256 totalLoansIssued,
+            uint256 maxDomainExpiration,
+            uint256 minLoanAmount,
+            uint256 maxLoanAmount,
+            uint256 minDuration,
+            uint256 maxDuration,
+            bool allowAdditionalProviders,
+            uint256 totalInterestEarned
         )
     {
         LiquidityPool storage pool = pools[poolId];
@@ -778,7 +794,14 @@ contract SatoruLending is Ownable, ReentrancyGuard {
             pool.minAiScore,
             pool.interestRate,
             pool.isActive,
-            pool.totalLoansIssued
+            pool.totalLoansIssued,
+            pool.maxDomainExpiration,
+            pool.minLoanAmount,
+            pool.maxLoanAmount,
+            pool.minDuration,
+            pool.maxDuration,
+            pool.allowAdditionalProviders,
+            pool.totalInterestEarned
         );
     }
 
@@ -799,4 +822,13 @@ contract SatoruLending is Ownable, ReentrancyGuard {
             totalVolumeProcessed
         );
     }
+
+    function getVersion() external pure returns (string memory) {
+        return VERSION;
+    }
+
+    /**
+     * @dev Storage gap for future upgrades
+     */
+    uint256[50] private __gap;
 }

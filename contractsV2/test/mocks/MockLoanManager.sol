@@ -36,9 +36,23 @@ contract MockLoanManager is ILoanManager {
         uint256 loanAmount,
         uint256 interestRate,
         uint256 repaymentDeadline,
-        bool isActive
+        bool isActive,
+        uint256 totalOwed,
+        uint256 amountRepaid,
+        uint256 startTime,
+        uint256 poolId,
+        uint256 requestId,
+        LoanStatus status
     ) {
-        return (address(0), 0, 0, 0, 0, false);
+        return (address(0), 0, 0, 0, 0, false, 0, 0, 0, 0, 0, LoanStatus.Active);
+    }
+
+    function getLoanStatus(uint256) external pure returns (LoanStatus) {
+        return LoanStatus.Active;
+    }
+
+    function markAuctionCompleted(uint256) external {
+        // Mock implementation - just accept the call
     }
 
     function processAuctionProceeds(uint256, uint256, address) external {

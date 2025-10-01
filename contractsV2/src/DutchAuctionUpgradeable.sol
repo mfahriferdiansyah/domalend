@@ -4,22 +4,26 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/ILoanManager.sol";
 import "./interfaces/IAIOracle.sol";
 import "./interfaces/IDutchAuction.sol";
 
-contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuction {
+contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IERC721Receiver, IDutchAuction {
     using SafeERC20 for IERC20;
 
-    // Core contracts
-    IERC20 public immutable usdc;
-    IDoma public immutable domaProtocol;
-    ILoanManager public immutable loanManager;
-    IAIOracle public immutable aiOracle;
+    string public constant VERSION = "3.0.0";
+
+    // Changed from immutable to storage variables
+    IERC20 public usdc;
+    IDoma public domaProtocol;
+    ILoanManager public loanManager;
+    IAIOracle public aiOracle;
 
     // Auction management
     struct Auction {
@@ -43,7 +47,7 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
     mapping(uint256 => Auction) public auctions;
     mapping(uint256 => uint256) public domainToAuction;
     mapping(uint256 => uint256) public loanToAuction;
-    uint256 public nextAuctionId = 1;
+    uint256 public nextAuctionId;
 
     // Auction parameters
     uint256 public constant DAILY_DECREASE_RATE = 100; // 1% per day (in basis points)
@@ -107,6 +111,13 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         uint256 timestamp
     );
 
+    event EmergencyRescue(
+        address indexed nftContract,
+        uint256 indexed tokenId,
+        address indexed recipient,
+        uint256 timestamp
+    );
+
     // Modifiers
     modifier onlyLoanManager() {
         require(msg.sender == address(loanManager), "Only LoanManager");
@@ -123,23 +134,36 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         _;
     }
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _usdc,
         address _domaProtocol,
         address _loanManager,
         address _aiOracle,
         address _owner
-    ) Ownable(_owner) {
+    ) public initializer {
         require(_usdc != address(0), "Invalid USDC address");
         require(_domaProtocol != address(0), "Invalid Doma address");
         require(_loanManager != address(0), "Invalid LoanManager address");
         require(_aiOracle != address(0), "Invalid AIOracle address");
 
+        __Ownable_init(_owner);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
+
         usdc = IERC20(_usdc);
         domaProtocol = IDoma(_domaProtocol);
         loanManager = ILoanManager(_loanManager);
         aiOracle = IAIOracle(_aiOracle);
+
+        nextAuctionId = 1;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function startAuction(StartAuctionParams memory params)
         external
@@ -178,7 +202,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         domainToAuction[params.domainTokenId] = auctionId;
         loanToAuction[params.loanId] = auctionId;
 
-        // Transfer domain to this contract for custody
         domaProtocol.safeTransferFrom(address(loanManager), address(this), params.domainTokenId);
 
         totalAuctionsCreated++;
@@ -219,31 +242,23 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         uint256 currentPrice = _calculateCurrentPrice(auctionId);
         uint256 minimumBid = getMinimumBid(auctionId);
 
-        // In Dutch auctions, the minimum should never exceed current price
-        // If there's a previous bid, require increment OR current price, whichever is lower
         if (auction.highestBidder != address(0)) {
-            // There's a previous bidder - use minimum increment OR current price, whichever is lower
             uint256 effectiveMinimum = minimumBid < currentPrice ? minimumBid : currentPrice;
             require(bidAmount >= effectiveMinimum, "Bid below effective minimum");
         } else {
-            // No previous bidder - just use current price
             require(bidAmount >= currentPrice, "Bid below current price");
         }
 
-        // Transfer USDC from bidder
         usdc.safeTransferFrom(msg.sender, address(this), bidAmount);
 
-        // Refund previous bidder if any
         if (auction.highestBidder != address(0)) {
             _refundPreviousBidder(auctionId);
         }
 
-        // Update auction state
         auction.highestBidder = msg.sender;
         auction.highestBid = bidAmount;
         userBids[msg.sender]++;
 
-        // Dutch auction - first valid bid wins immediately
         bool isWinningBid = true;
 
         emit BidPlaced(
@@ -255,7 +270,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
             isWinningBid
         );
 
-        // End auction immediately with winning bid
         _completeAuction(auctionId);
     }
 
@@ -268,13 +282,10 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         require(auction.isActive, "Auction not active");
         require(!auction.isCompleted, "Auction already completed");
 
-        // Only allow manual ending if auction expired without bids
         if (auction.highestBidder == address(0)) {
             require(block.timestamp > auction.endTime, "Auction not expired");
-            // No bids - return domain to borrower via LoanManager
             _cancelAuctionNoBids(auctionId);
         } else {
-            // Has bids - complete normally
             _completeAuction(auctionId);
         }
     }
@@ -287,12 +298,10 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
     {
         Auction storage auction = auctions[auctionId];
 
-        // Refund highest bidder if any
         if (auction.highestBidder != address(0)) {
             _refundPreviousBidder(auctionId);
         }
 
-        // Return domain to borrower via LoanManager
         domaProtocol.safeTransferFrom(address(this), address(loanManager), auction.domainTokenId);
 
         auction.isActive = false;
@@ -319,7 +328,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         if (auction.highestBidder == address(0)) {
             return currentPrice;
         } else {
-            // Require minimum increment above highest bid
             uint256 increment = (auction.highestBid * MIN_BID_INCREMENT) / 10000;
             return auction.highestBid + increment;
         }
@@ -348,7 +356,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         uint256 currentPrice = _calculateCurrentPrice(auctionId);
         uint256 minimumBid = getMinimumBid(auctionId);
 
-        // Use same logic as placeBid for consistency
         if (auction.highestBidder != address(0)) {
             uint256 effectiveMinimum = minimumBid < currentPrice ? minimumBid : currentPrice;
             if (bidAmount < effectiveMinimum) {
@@ -402,7 +409,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
     function getActiveAuctions() external view returns (uint256[] memory) {
         uint256 activeCount = 0;
 
-        // Count active auctions
         for (uint256 i = 1; i < nextAuctionId; i++) {
             if (auctions[i].isActive && !auctions[i].isCompleted) {
                 activeCount++;
@@ -412,7 +418,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         uint256[] memory activeAuctions = new uint256[](activeCount);
         uint256 index = 0;
 
-        // Populate active auctions
         for (uint256 i = 1; i < nextAuctionId; i++) {
             if (auctions[i].isActive && !auctions[i].isCompleted) {
                 activeAuctions[index] = i;
@@ -461,12 +466,9 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
 
         uint256 timeElapsed = block.timestamp - auction.startTime;
 
-        // Calculate price decrease: startingPrice * (timeElapsed / 1 day) * 1%
-        // Decline rate: exactly 1% per day for 100 days to reach $0
-        uint256 dailyDecreaseRate = 100; // 1% in basis points
+        uint256 dailyDecreaseRate = 100;
         uint256 priceDecrease = (auction.startingPrice * timeElapsed * dailyDecreaseRate) / (1 days * 10000);
 
-        // Ensure price doesn't go below zero (after 100 days)
         if (priceDecrease >= auction.startingPrice) {
             return 0;
         }
@@ -476,13 +478,11 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
     }
 
     function _calculateReservePrice(uint256 loanAmount, uint256 aiScore) internal pure returns (uint256) {
-        // Maximum market discovery: no reserve price floor
-        // Allow auctions to decline all the way to $0
         return 0;
     }
 
     function _calculateStartingPrice(uint256 loanAmount) internal pure returns (uint256) {
-        return (loanAmount * STARTING_PRICE_MULTIPLIER) / 100; // 2x loan amount
+        return (loanAmount * STARTING_PRICE_MULTIPLIER) / 100;
     }
 
     function _completeAuction(uint256 auctionId) internal {
@@ -492,16 +492,14 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         auction.isActive = false;
         auction.isCompleted = true;
 
-        // Transfer domain to winner
         domaProtocol.safeTransferFrom(address(this), auction.highestBidder, auction.domainTokenId);
 
-        // Calculate surplus (amount above loan)
         uint256 surplus = auction.highestBid > auction.loanAmount ?
             auction.highestBid - auction.loanAmount : 0;
 
-        // Distribute proceeds to lenders via LoanManager
         usdc.safeTransfer(address(loanManager), auction.highestBid);
         loanManager.processAuctionProceeds(auctionId, auction.highestBid, auction.highestBidder);
+        loanManager.markAuctionCompleted(auction.loanId);
 
         totalAuctionsCompleted++;
         totalAuctionVolume += auction.highestBid;
@@ -524,7 +522,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         auction.isActive = false;
         auction.isCancelled = true;
 
-        // Return domain to LoanManager (which can handle returning to borrower)
         domaProtocol.safeTransferFrom(address(this), address(loanManager), auction.domainTokenId);
 
         emit AuctionCancelled(
@@ -543,7 +540,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
             address previousBidder = auction.highestBidder;
             uint256 refundAmount = auction.highestBid;
 
-            // Clear before transfer to prevent reentrancy
             auction.highestBidder = address(0);
             auction.highestBid = 0;
 
@@ -558,7 +554,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         }
     }
 
-    // Emergency rescue function for stuck NFTs (onlyOwner)
     function emergencyRescueNFT(
         address nftContract,
         uint256 tokenId,
@@ -570,15 +565,6 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
         emit EmergencyRescue(nftContract, tokenId, recipient, block.timestamp);
     }
 
-    // Emergency rescue event
-    event EmergencyRescue(
-        address indexed nftContract,
-        uint256 indexed tokenId,
-        address indexed recipient,
-        uint256 timestamp
-    );
-
-    // IERC721Receiver implementation
     function onERC721Received(
         address,
         address,
@@ -587,4 +573,13 @@ contract DutchAuction is Ownable, ReentrancyGuard, IERC721Receiver, IDutchAuctio
     ) external pure override returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
     }
+
+    function getVersion() external pure returns (string memory) {
+        return VERSION;
+    }
+
+    /**
+     * @dev Storage gap for future upgrades
+     */
+    uint256[50] private __gap;
 }

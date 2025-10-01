@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract AIOracle is Ownable, AccessControl {
+contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     bytes32 public constant SCORING_SERVICE_ROLE = keccak256("SCORING_SERVICE_ROLE");
+    string public constant VERSION = "3.0.0";
 
     address public backendService;
-    bool public emergencyPaused = false;
+    bool public emergencyPaused;
 
     struct DomainScore {
         uint256 score;
@@ -87,9 +90,21 @@ contract AIOracle is Ownable, AccessControl {
         _;
     }
 
-    constructor(address initialOwner) Ownable(initialOwner) {
-        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
+
+    function initialize(address initialOwner) public initializer {
+        __Ownable_init(initialOwner);
+        __AccessControl_init();
+        __UUPSUpgradeable_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
+        emergencyPaused = false;
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function requestScoring(uint256 domainTokenId) external {
         totalScoringRequests++;
@@ -297,4 +312,13 @@ contract AIOracle is Ownable, AccessControl {
         // Stats are updated in the calling functions
         // This function is kept for interface consistency
     }
+
+    function getVersion() external pure returns (string memory) {
+        return VERSION;
+    }
+
+    /**
+     * @dev Storage gap for future upgrades
+     */
+    uint256[50] private __gap;
 }

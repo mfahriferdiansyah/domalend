@@ -17,6 +17,13 @@ interface ISatoruLending {
             uint256 minAiScore,
             uint256 interestRate,
             bool isActive,
-            uint256 totalLoansIssued
+            uint256 totalLoansIssued,
+            uint256 maxDomainExpiration,
+            uint256 minLoanAmount,
+            uint256 maxLoanAmount,
+            uint256 minDuration,
+            uint256 maxDuration,
+            bool allowAdditionalProviders,
+            uint256 totalInterestEarned
         );
 }

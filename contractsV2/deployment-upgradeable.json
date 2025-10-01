@@ -1,0 +1,34 @@
+{
+  "network": "doma-testnet",
+  "chainId": 97476,
+  "deployer": "0xaBA3cF48A81225De43a642ca486C1c069ec11a53",
+  "timestamp": "2025-10-01",
+  "proxyAdmin": "0x7fd271d089d5cd01AFEE648F8CD25bEc94cce9C9",
+  "aiOracle": {
+    "implementation": "0xB5fB366A7973d90ba27033eddb9EA24231f748C9",
+    "proxy": "0xFF3803da2E2F3Ec8485E855e09898b548b506188"
+  },
+  "satoruLending": {
+    "implementation": "0xE1685368816C97E5Fc4B3C72423FC08A6AE91642",
+    "proxy": "0xD5695a0700552c1FA747cc029a60cdB27373CE26"
+  },
+  "loanManager": {
+    "implementation": "0xE22699af9a79A7F6aa7885688b5122A9A84b68bC",
+    "proxy": "0x45D8F12329890Cd325FE05601F8E451d0b6B9D42"
+  },
+  "dutchAuction": {
+    "implementation": "0x5Aa12B7D1FD19AA59962386717786248A6DAaEeD",
+    "proxy": "0xe6e20d2d356565614BCb6150350c1dfC9F653f36"
+  },
+  "usageAddresses": {
+    "note": "Always use PROXY addresses for interactions",
+    "AIOracle": "0xFF3803da2E2F3Ec8485E855e09898b548b506188",
+    "SatoruLending": "0xD5695a0700552c1FA747cc029a60cdB27373CE26",
+    "LoanManager": "0x45D8F12329890Cd325FE05601F8E451d0b6B9D42",
+    "DutchAuction": "0xe6e20d2d356565614BCb6150350c1dfC9F653f36"
+  },
+  "dependencies": {
+    "USDC": "0x08CF67303E6ba2B80f5AFdE7ad926653145c6a7B",
+    "DomaProtocol": "0x424bDf2E8a6F52Bd2c1C81D9437b0DC0309DF90f"
+  }
+}

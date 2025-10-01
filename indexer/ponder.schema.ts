@@ -39,12 +39,15 @@ export const loan = onchainTable(
     domainTokenId: t.text().notNull(),
     domainName: t.text(),
     originalAmount: t.text().notNull(), // Original loan amount
+    totalOwed: t.text().notNull(), // Total owed including interest
     currentBalance: t.text().notNull(), // Current outstanding balance
     totalRepaid: t.text().notNull().default("0"), // Total amount repaid so far
     aiScore: t.integer(),
     interestRate: t.integer(),
+    duration: t.bigint(), // Loan duration in seconds
+    startTime: t.timestamp(), // Loan start timestamp
     poolId: t.text(),
-    status: t.text().notNull().default("active"), // 'active', 'repaid', 'defaulted', 'liquidated'
+    status: t.text().notNull().default("active"), // 'active', 'auctioning', 'sold', 'repaid'
     repaymentDeadline: t.timestamp(),
     liquidationAttempted: t.boolean().notNull().default(false),
     liquidationTxHash: t.text(),
@@ -111,10 +114,13 @@ export const auction = onchainTable(
     startingPrice: t.text(),
     currentPrice: t.text(),
     finalPrice: t.text(),
+    reservePrice: t.text(),
+    loanAmount: t.text(),
     status: t.text().notNull(), // 'active', 'ended', 'cancelled'
     recoveryRate: t.real(), // finalPrice / loanAmount
     startedAt: t.timestamp(),
     endedAt: t.timestamp(),
+    endTimestamp: t.timestamp(),
     lastUpdated: t.timestamp().notNull(),
     createdAt: t.timestamp().notNull(),
     blockNumber: t.bigint().notNull(),
@@ -207,8 +213,15 @@ export const pool = onchainTable(
     poolId: t.text().notNull(),
     creatorAddress: t.hex().notNull(),
     totalLiquidity: t.text().notNull().default("0"),
+    availableLiquidity: t.text().notNull().default("0"),
     minAiScore: t.integer(),
+    maxDomainExpiration: t.bigint(),
     interestRate: t.integer(),
+    minLoanAmount: t.text(),
+    maxLoanAmount: t.text(),
+    minDuration: t.bigint(),
+    maxDuration: t.bigint(),
+    allowAdditionalProviders: t.boolean().notNull().default(false),
     participantCount: t.integer().notNull().default(0),
     status: t.text().notNull().default("active"), // 'active', 'paused', 'closed'
     createdAt: t.timestamp().notNull(),

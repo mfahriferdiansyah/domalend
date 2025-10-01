@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../src/DutchAuction.sol";
+import "../src/legacy/DutchAuction.sol";
 import "../src/interfaces/IDutchAuction.sol";
 import "./mocks/MockUSDC.sol";
 import "./mocks/MockDoma.sol";
