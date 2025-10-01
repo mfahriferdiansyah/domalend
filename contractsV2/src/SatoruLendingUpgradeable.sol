@@ -7,13 +7,16 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/IAIOracle.sol";
 import "./interfaces/ILoanManager.sol";
 
-contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
+
+    string public constant VERSION = "3.0.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;
@@ -110,7 +113,13 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         uint256 initialLiquidity,
         uint256 minAiScore,
         uint256 interestRate,
-        uint256 timestamp
+        uint256 timestamp,
+        uint256 maxDomainExpiration,
+        uint256 minLoanAmount,
+        uint256 maxLoanAmount,
+        uint256 minDuration,
+        uint256 maxDuration,
+        bool allowAdditionalProviders
     );
 
     event LiquidityAdded(
@@ -198,6 +207,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
     ) public initializer {
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
         usdc = IERC20(_usdc);
         domaProtocol = IDoma(_domaProtocol);
@@ -206,6 +216,8 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         nextPoolId = 1;
         nextRequestId = 1;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function setLoanManager(address _loanManager) external onlyOwner {
         loanManager = ILoanManager(_loanManager);
@@ -251,7 +263,13 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
             params.initialLiquidity,
             params.minAiScore,
             params.interestRate,
-            block.timestamp
+            block.timestamp,
+            params.maxDomainExpiration,
+            params.minLoanAmount,
+            params.maxLoanAmount,
+            params.minDuration,
+            params.maxDuration,
+            params.allowAdditionalProviders
         );
     }
 
@@ -758,7 +776,14 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
             uint256 minAiScore,
             uint256 interestRate,
             bool isActive,
-            uint256 totalLoansIssued
+            uint256 totalLoansIssued,
+            uint256 maxDomainExpiration,
+            uint256 minLoanAmount,
+            uint256 maxLoanAmount,
+            uint256 minDuration,
+            uint256 maxDuration,
+            bool allowAdditionalProviders,
+            uint256 totalInterestEarned
         )
     {
         LiquidityPool storage pool = pools[poolId];
@@ -769,7 +794,14 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
             pool.minAiScore,
             pool.interestRate,
             pool.isActive,
-            pool.totalLoansIssued
+            pool.totalLoansIssued,
+            pool.maxDomainExpiration,
+            pool.minLoanAmount,
+            pool.maxLoanAmount,
+            pool.minDuration,
+            pool.maxDuration,
+            pool.allowAdditionalProviders,
+            pool.totalInterestEarned
         );
     }
 
@@ -789,6 +821,10 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
             totalLoansExecuted,
             totalVolumeProcessed
         );
+    }
+
+    function getVersion() external pure returns (string memory) {
+        return VERSION;
     }
 
     /**

@@ -6,6 +6,14 @@ pragma solidity ^0.8.20;
  * @dev Interface for Loan Manager contract
  */
 interface ILoanManager {
+    enum LoanStatus {
+        Active,       // Loan is current, not past due
+        Overdue,      // Payment deadline passed, can be liquidated
+        Auctioning,   // Collateral in Dutch auction
+        Sold,         // Auction completed, NFT sold
+        Repaid        // Fully repaid by borrower
+    }
+
     struct CreateLoanParams {
         address borrower;
         uint256 domainTokenId;
@@ -41,8 +49,16 @@ interface ILoanManager {
         uint256 loanAmount,
         uint256 interestRate,
         uint256 repaymentDeadline,
-        bool isActive
+        bool isActive,
+        uint256 totalOwed,
+        uint256 amountRepaid,
+        uint256 startTime,
+        uint256 poolId,
+        uint256 requestId,
+        LoanStatus status
     );
 
+    function getLoanStatus(uint256 loanId) external view returns (LoanStatus);
+    function markAuctionCompleted(uint256 loanId) external;
     function processAuctionProceeds(uint256 auctionId, uint256 salePrice, address winner) external;
 }

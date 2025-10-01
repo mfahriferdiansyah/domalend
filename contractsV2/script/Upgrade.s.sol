@@ -2,157 +2,124 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
-import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "../src/AIOracleUpgradeable.sol";
 import "../src/SatoruLendingUpgradeable.sol";
 import "../src/LoanManagerUpgradeable.sol";
 import "../src/DutchAuctionUpgradeable.sol";
 
 /**
- * @title Upgrade Script for DomaLend V2
- * @notice This script upgrades implementation contracts while preserving state
- * @dev IMPORTANT: This uses the Transparent Proxy pattern
- *
- * Usage Examples:
- * ===============
- *
- * 1. Upgrade AIOracle:
- *    CONTRACT_NAME=AIOracle forge script script/Upgrade.s.sol:UpgradeScript --rpc-url $RPC_URL --broadcast
- *
- * 2. Upgrade SatoruLending:
- *    CONTRACT_NAME=SatoruLending forge script script/Upgrade.s.sol:UpgradeScript --rpc-url $RPC_URL --broadcast
- *
- * 3. Upgrade LoanManager:
- *    CONTRACT_NAME=LoanManager forge script script/Upgrade.s.sol:UpgradeScript --rpc-url $RPC_URL --broadcast
- *
- * 4. Upgrade DutchAuction:
- *    CONTRACT_NAME=DutchAuction forge script script/Upgrade.s.sol:UpgradeScript --rpc-url $RPC_URL --broadcast
+ * @title Upgrade DomaLend Contracts
+ * @notice Upgrades all UUPS proxies to new implementations
+ * @dev Tests that upgrade mechanism works by deploying new impls and calling upgradeTo()
  *
  * Required Environment Variables:
- * ===============================
- * - PRIVATE_KEY: Deployer private key (must be ProxyAdmin owner)
- * - CONTRACT_NAME: Name of contract to upgrade (AIOracle, SatoruLending, LoanManager, or DutchAuction)
- * - PROXY_ADMIN_ADDRESS: Address of the ProxyAdmin contract
- * - [CONTRACT]_PROXY_ADDRESS: Address of the proxy to upgrade
+ * - PRIVATE_KEY: Owner private key
+ * - AIORACLE_PROXY: AIOracle proxy address
+ * - SATORU_PROXY: SatoruLending proxy address
+ * - LOANMANAGER_PROXY: LoanManager proxy address
+ * - DUTCHAUCTION_PROXY: DutchAuction proxy address
+ *
+ * Usage:
+ * PRIVATE_KEY=0x... forge script script/Upgrade.s.sol:UpgradeScript \
+ *   --rpc-url https://rpc-testnet.doma.xyz \
+ *   --broadcast \
+ *   --legacy
  */
 contract UpgradeScript is Script {
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 
-        // Get environment variables
-        string memory contractName = vm.envString("CONTRACT_NAME");
-        address proxyAdminAddress = vm.envAddress("PROXY_ADMIN_ADDRESS");
+        address aiOracleProxy = vm.envAddress("AIORACLE_PROXY");
+        address satoruProxy = vm.envAddress("SATORU_PROXY");
+        address loanManagerProxy = vm.envAddress("LOANMANAGER_PROXY");
+        address dutchAuctionProxy = vm.envAddress("DUTCHAUCTION_PROXY");
 
         console.log("========================================");
-        console.log("DomaLend V2 Upgrade Script");
+        console.log("DomaLend UUPS Upgrade");
         console.log("========================================");
-        console.log("Upgrader:", deployer);
-        console.log("ProxyAdmin:", proxyAdminAddress);
-        console.log("Contract to upgrade:", contractName);
+        console.log("Deployer:", deployer);
         console.log("");
 
-        ProxyAdmin proxyAdmin = ProxyAdmin(proxyAdminAddress);
+        // Check current versions
+        console.log("Current Versions:");
+        console.log("  AIOracle:     ", AIOracleUpgradeable(aiOracleProxy).getVersion());
+        console.log("  SatoruLending:", SatoruLendingUpgradeable(satoruProxy).getVersion());
+        console.log("  LoanManager:  ", LoanManagerUpgradeable(loanManagerProxy).getVersion());
+        console.log("  DutchAuction: ", DutchAuctionUpgradeable(dutchAuctionProxy).getVersion());
+        console.log("");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // Deploy new implementation based on contract name
-        if (keccak256(bytes(contractName)) == keccak256(bytes("AIOracle"))) {
-            upgradeAIOracle(proxyAdmin);
-        } else if (keccak256(bytes(contractName)) == keccak256(bytes("SatoruLending"))) {
-            upgradeSatoruLending(proxyAdmin);
-        } else if (keccak256(bytes(contractName)) == keccak256(bytes("LoanManager"))) {
-            upgradeLoanManager(proxyAdmin);
-        } else if (keccak256(bytes(contractName)) == keccak256(bytes("DutchAuction"))) {
-            upgradeDutchAuction(proxyAdmin);
-        } else {
-            revert("Invalid CONTRACT_NAME. Must be: AIOracle, SatoruLending, LoanManager, or DutchAuction");
-        }
+        // Deploy new implementations
+        console.log("Deploying new implementations...");
+        console.log("");
+
+        AIOracleUpgradeable newAIOracle = new AIOracleUpgradeable();
+        console.log("  AIOracle:     ", address(newAIOracle));
+
+        SatoruLendingUpgradeable newSatoru = new SatoruLendingUpgradeable();
+        console.log("  SatoruLending:", address(newSatoru));
+
+        LoanManagerUpgradeable newLoanManager = new LoanManagerUpgradeable();
+        console.log("  LoanManager:  ", address(newLoanManager));
+
+        DutchAuctionUpgradeable newAuction = new DutchAuctionUpgradeable();
+        console.log("  DutchAuction: ", address(newAuction));
+        console.log("");
+
+        // Upgrade all proxies
+        console.log("Upgrading proxies...");
+        console.log("");
+
+        UUPSUpgradeable(aiOracleProxy).upgradeToAndCall(address(newAIOracle), "");
+        console.log("  AIOracle upgraded!");
+
+        UUPSUpgradeable(satoruProxy).upgradeToAndCall(address(newSatoru), "");
+        console.log("  SatoruLending upgraded!");
+
+        UUPSUpgradeable(loanManagerProxy).upgradeToAndCall(address(newLoanManager), "");
+        console.log("  LoanManager upgraded!");
+
+        UUPSUpgradeable(dutchAuctionProxy).upgradeToAndCall(address(newAuction), "");
+        console.log("  DutchAuction upgraded!");
 
         vm.stopBroadcast();
 
         console.log("");
+        console.log("Verifying new versions...");
+        console.log("");
+
+        // Check new versions
+        string memory aiVersion = AIOracleUpgradeable(aiOracleProxy).getVersion();
+        string memory satoruVersion = SatoruLendingUpgradeable(satoruProxy).getVersion();
+        string memory loanVersion = LoanManagerUpgradeable(loanManagerProxy).getVersion();
+        string memory auctionVersion = DutchAuctionUpgradeable(dutchAuctionProxy).getVersion();
+
+        console.log("  AIOracle:     ", aiVersion);
+        console.log("  SatoruLending:", satoruVersion);
+        console.log("  LoanManager:  ", loanVersion);
+        console.log("  DutchAuction: ", auctionVersion);
+        console.log("");
+
         console.log("========================================");
-        console.log("UPGRADE COMPLETE");
+        console.log("UPGRADE COMPLETE!");
         console.log("========================================");
-    }
-
-    function upgradeAIOracle(ProxyAdmin proxyAdmin) internal {
-        address proxyAddress = vm.envAddress("AIORACLE_PROXY_ADDRESS");
-
-        console.log("Upgrading AIOracle...");
-        console.log("  Proxy address:", proxyAddress);
-
-        // Deploy new implementation
-        AIOracleUpgradeable newImpl = new AIOracleUpgradeable();
-        console.log("  New implementation:", address(newImpl));
-
-        // Upgrade to new implementation
-        proxyAdmin.upgradeAndCall(
-            ITransparentUpgradeableProxy(proxyAddress),
-            address(newImpl),
-            "" // No initialization data for upgrades
-        );
-
-        console.log("  Upgrade successful!");
-        console.log("  New implementation address:", address(newImpl));
-    }
-
-    function upgradeSatoruLending(ProxyAdmin proxyAdmin) internal {
-        address proxyAddress = vm.envAddress("SATORU_LENDING_PROXY_ADDRESS");
-
-        console.log("Upgrading SatoruLending...");
-        console.log("  Proxy address:", proxyAddress);
-
-        SatoruLendingUpgradeable newImpl = new SatoruLendingUpgradeable();
-        console.log("  New implementation:", address(newImpl));
-
-        proxyAdmin.upgradeAndCall(
-            ITransparentUpgradeableProxy(proxyAddress),
-            address(newImpl),
-            ""
-        );
-
-        console.log("  Upgrade successful!");
-        console.log("  New implementation address:", address(newImpl));
-    }
-
-    function upgradeLoanManager(ProxyAdmin proxyAdmin) internal {
-        address proxyAddress = vm.envAddress("LOAN_MANAGER_PROXY_ADDRESS");
-
-        console.log("Upgrading LoanManager...");
-        console.log("  Proxy address:", proxyAddress);
-
-        LoanManagerUpgradeable newImpl = new LoanManagerUpgradeable();
-        console.log("  New implementation:", address(newImpl));
-
-        proxyAdmin.upgradeAndCall(
-            ITransparentUpgradeableProxy(proxyAddress),
-            address(newImpl),
-            ""
-        );
-
-        console.log("  Upgrade successful!");
-        console.log("  New implementation address:", address(newImpl));
-    }
-
-    function upgradeDutchAuction(ProxyAdmin proxyAdmin) internal {
-        address proxyAddress = vm.envAddress("DUTCH_AUCTION_PROXY_ADDRESS");
-
-        console.log("Upgrading DutchAuction...");
-        console.log("  Proxy address:", proxyAddress);
-
-        DutchAuctionUpgradeable newImpl = new DutchAuctionUpgradeable();
-        console.log("  New implementation:", address(newImpl));
-
-        proxyAdmin.upgradeAndCall(
-            ITransparentUpgradeableProxy(proxyAddress),
-            address(newImpl),
-            ""
-        );
-
-        console.log("  Upgrade successful!");
-        console.log("  New implementation address:", address(newImpl));
+        console.log("");
+        console.log("Proxy addresses (unchanged):");
+        console.log("  AIOracle:     ", aiOracleProxy);
+        console.log("  SatoruLending:", satoruProxy);
+        console.log("  LoanManager:  ", loanManagerProxy);
+        console.log("  DutchAuction: ", dutchAuctionProxy);
+        console.log("");
+        console.log("New implementation addresses:");
+        console.log("  AIOracle:     ", address(newAIOracle));
+        console.log("  SatoruLending:", address(newSatoru));
+        console.log("  LoanManager:  ", address(newLoanManager));
+        console.log("  DutchAuction: ", address(newAuction));
+        console.log("");
+        console.log("State preserved, logic upgraded!");
+        console.log("========================================");
     }
 }

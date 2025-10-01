@@ -115,13 +115,27 @@ contract MockLoanManager is ILoanManager {
         returns (
             address borrower,
             uint256 domainTokenId,
-            uint256 loanAmount,
+            uint256 principalAmount,
+            uint256 totalOwed,
+            uint256 amountRepaid,
             uint256 interestRate,
+            uint256 startTime,
             uint256 repaymentDeadline,
+            uint256 poolId,
+            uint256 requestId,
+            LoanStatus status,
             bool isActive
         )
     {
-        return (address(0), 0, 0, 0, 0, false);
+        return (address(0), 0, 0, 0, 0, 0, 0, 0, 0, 0, LoanStatus.Active, false);
+    }
+
+    function getLoanStatus(uint256) external pure returns (LoanStatus) {
+        return LoanStatus.Active;
+    }
+
+    function markAuctionCompleted(uint256) external {
+        // Mock implementation - just accept the call
     }
 
     function processAuctionProceeds(uint256, uint256, address) external {
@@ -136,7 +150,13 @@ contract SatoruLendingTest is Test {
         address indexed creator,
         uint256 initialLiquidity,
         uint256 minAiScore,
+        uint256 maxDomainExpiration,
         uint256 interestRate,
+        uint256 minLoanAmount,
+        uint256 maxLoanAmount,
+        uint256 minDuration,
+        uint256 maxDuration,
+        bool allowAdditionalProviders,
         uint256 timestamp
     );
 
@@ -245,7 +265,7 @@ contract SatoruLendingTest is Test {
         });
 
         vm.expectEmit(true, true, false, true, address(lending));
-        emit PoolCreated(1, user1, 10000e6, 80, 800, block.timestamp);
+        emit PoolCreated(1, user1, 10000e6, 80, 400, 800, 1000e6, 5000e6, 7 days, 90 days, true, block.timestamp);
 
         vm.prank(user1);
         uint256 poolId = lending.createLiquidityPool(params);
@@ -257,9 +277,16 @@ contract SatoruLendingTest is Test {
             uint256 totalLiquidity,
             uint256 availableLiquidity,
             uint256 minAiScore,
+            uint256 maxDomainExpiration,
             uint256 interestRate,
+            uint256 minLoanAmount,
+            uint256 maxLoanAmount,
+            uint256 minDuration,
+            uint256 maxDuration,
+            bool allowAdditionalProviders,
             bool isActive,
-            uint256 totalLoansIssued
+            uint256 totalLoansIssued,
+            uint256 totalInterestEarned
         ) = lending.getPoolInfo(poolId);
 
         assertEq(creator, user1);
@@ -645,7 +672,7 @@ contract SatoruLendingTest is Test {
         });
 
         vm.expectEmit(true, true, false, true, address(lending));
-        emit PoolCreated(1, user1, 10000e6, 80, 6000, block.timestamp);
+        emit PoolCreated(1, user1, 10000e6, 80, 400, 6000, 1000e6, 5000e6, 7 days, 90 days, true, block.timestamp);
 
         vm.prank(user1);
         uint256 poolId = lending.createLiquidityPool(params);

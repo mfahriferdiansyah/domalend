@@ -1,0 +1,32 @@
+Compiling 1 files with Solc 0.8.22
+Solc 0.8.22 finished in 11.59s
+Compiler run successful with warnings:
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/SatoruLendingUpgradeable.sol:740:31:
+    |
+740 |     function _updatePoolStats(uint256 poolId, uint256 loanAmount)
+    |                               ^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/LoanManagerUpgradeable.sol:419:75:
+    |
+419 |     function processAuctionProceeds(uint256 auctionId, uint256 salePrice, address winner)
+    |                                                                           ^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/DutchAuctionUpgradeable.sol:474:37:
+    |
+474 |     function _calculateReservePrice(uint256 loanAmount, uint256 aiScore) internal pure returns (uint256) {
+    |                                     ^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/DutchAuctionUpgradeable.sol:474:57:
+    |
+474 |     function _calculateReservePrice(uint256 loanAmount, uint256 aiScore) internal pure returns (uint256) {
+    |                                                         ^^^^^^^^^^^^^^^
+
+[2m2025-10-01T09:34:31.036100Z[0m [31mERROR[0m [2mfoundry_compilers_artifacts_solc::sources[0m[2m:[0m [3merror[0m[2m=[0m"/Users/kadzu/Documents/Repositories/domalend/domalend/contractsV2/src/legacy/AIOracle.sol": No such file or directory (os error 2)
+Error: failed to read artifact source file for `/Users/kadzu/Documents/Repositories/domalend/domalend/contractsV2/src/legacy/AIOracle.sol`
+
+Context:
+- "/Users/kadzu/Documents/Repositories/domalend/domalend/contractsV2/src/legacy/AIOracle.sol": No such file or directory (os error 2)

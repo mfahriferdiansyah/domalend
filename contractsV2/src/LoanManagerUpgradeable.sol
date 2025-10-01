@@ -7,13 +7,16 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/ISatoruLending.sol";
 import "./interfaces/IDutchAuction.sol";
 import "./interfaces/ILoanManager.sol";
 
-contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, ILoanManager {
+contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, ILoanManager {
     using SafeERC20 for IERC20;
+
+    string public constant VERSION = "3.0.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;
@@ -34,6 +37,7 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
         uint256 requestId;
         bool isActive;
         bool isLiquidated;
+        LoanStatus status;
         address[] lenders;
         mapping(address => uint256) lenderShares;
         address poolCreator;
@@ -162,6 +166,7 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
     ) public initializer {
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
         usdc = IERC20(_usdc);
         domaProtocol = IDoma(_domaProtocol);
@@ -169,6 +174,8 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
 
         nextLoanId = 1;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function setDutchAuction(address _dutchAuction) external onlyOwner {
         address oldAuction = address(dutchAuction);
@@ -195,8 +202,9 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
         loan.totalOwed = _calculateTotalOwed(params.loanAmount, params.interestRate, params.duration);
         loan.poolId = params.poolId;
         loan.isActive = true;
+        loan.status = LoanStatus.Active;
 
-        (address creator,,,,,,) = satoruLending.getPoolInfo(params.poolId);
+        (address creator,,,,,,,,,,,,,) = satoruLending.getPoolInfo(params.poolId);
         loan.poolCreator = creator;
 
         lockCollateral(params.domainTokenId, params.borrower);
@@ -238,6 +246,7 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
         loan.totalOwed = _calculateTotalOwed(params.loanAmount, params.interestRate, params.duration);
         loan.requestId = params.requestId;
         loan.isActive = true;
+        loan.status = LoanStatus.Active;
 
         loan.lenders = loanData.contributors;
         for (uint256 i = 0; i < loanData.contributors.length; i++) {
@@ -341,6 +350,7 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
 
         if (isFullyRepaid) {
             loan.isActive = false;
+            loan.status = LoanStatus.Repaid;
             totalLoansRepaid++;
             lockedDomains[loan.domainTokenId] = false;
             domaProtocol.transferFrom(address(this), loan.borrower, loan.domainTokenId);
@@ -362,6 +372,7 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
         Loan storage loan = loans[loanId];
         loan.isLiquidated = true;
         loan.isActive = false;
+        loan.status = LoanStatus.Auctioning;
 
         uint256 aiScore = 75;
         string memory domainName = "defaultdomain.eth";
@@ -548,18 +559,61 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
             uint256 loanAmount,
             uint256 interestRate,
             uint256 repaymentDeadline,
-            bool isActive
+            bool isActive,
+            uint256 totalOwed,
+            uint256 amountRepaid,
+            uint256 startTime,
+            uint256 poolId,
+            uint256 requestId,
+            LoanStatus status
         )
     {
         Loan storage loan = loans[loanId];
+
+        // Compute status dynamically for Overdue
+        LoanStatus currentStatus = loan.status;
+        if (currentStatus == LoanStatus.Active && isLoanDefaulted(loanId)) {
+            currentStatus = LoanStatus.Overdue;
+        }
+
         return (
             loan.borrower,
             loan.domainTokenId,
             loan.principalAmount,
             loan.interestRate,
             loan.startTime + loan.duration,
-            loan.isActive
+            loan.isActive,
+            loan.totalOwed,
+            loan.amountRepaid,
+            loan.startTime,
+            loan.poolId,
+            loan.requestId,
+            currentStatus
         );
+    }
+
+    function getLoanStatus(uint256 loanId)
+        external
+        view
+        loanExists(loanId)
+        returns (LoanStatus)
+    {
+        Loan storage loan = loans[loanId];
+
+        // Handle computed Overdue status (if not updated yet)
+        if (loan.status == LoanStatus.Active && isLoanDefaulted(loanId)) {
+            return LoanStatus.Overdue;
+        }
+
+        return loan.status;
+    }
+
+    function markAuctionCompleted(uint256 loanId)
+        external
+        onlyDutchAuction
+        loanExists(loanId)
+    {
+        loans[loanId].status = LoanStatus.Sold;
     }
 
     function isCollateralLocked(uint256 domainTokenId) external view returns (bool) {
@@ -613,8 +667,13 @@ contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, Reentrancy
         );
     }
 
+    function getVersion() external pure returns (string memory) {
+        return VERSION;
+    }
+
     /**
      * @dev Storage gap for future upgrades
+     * Reduced from 50 to 49 after adding LoanStatus status field
      */
-    uint256[50] private __gap;
+    uint256[49] private __gap;
 }

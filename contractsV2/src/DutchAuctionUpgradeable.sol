@@ -7,14 +7,17 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/IDoma.sol";
 import "./interfaces/ILoanManager.sol";
 import "./interfaces/IAIOracle.sol";
 import "./interfaces/IDutchAuction.sol";
 
-contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, IERC721Receiver, IDutchAuction {
+contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IERC721Receiver, IDutchAuction {
     using SafeERC20 for IERC20;
+
+    string public constant VERSION = "3.0.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;
@@ -150,6 +153,7 @@ contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, Reentranc
 
         __Ownable_init(_owner);
         __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
         usdc = IERC20(_usdc);
         domaProtocol = IDoma(_domaProtocol);
@@ -158,6 +162,8 @@ contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, Reentranc
 
         nextAuctionId = 1;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function startAuction(StartAuctionParams memory params)
         external
@@ -493,6 +499,7 @@ contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, Reentranc
 
         usdc.safeTransfer(address(loanManager), auction.highestBid);
         loanManager.processAuctionProceeds(auctionId, auction.highestBid, auction.highestBidder);
+        loanManager.markAuctionCompleted(auction.loanId);
 
         totalAuctionsCompleted++;
         totalAuctionVolume += auction.highestBid;
@@ -565,6 +572,10 @@ contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, Reentranc
         bytes calldata
     ) external pure override returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
+    }
+
+    function getVersion() external pure returns (string memory) {
+        return VERSION;
     }
 
     /**

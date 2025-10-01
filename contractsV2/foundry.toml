@@ -6,7 +6,7 @@ solc = "0.8.22"
 optimizer = true
 optimizer_runs = 200
 via_ir = true
-exclude = ["src/legacy/**", "script/legacy/**", "test/legacy/**"]
+exclude = ["**/legacy/**"]
 
 [rpc_endpoints]
 doma_testnet = "https://rpc-testnet.doma.xyz"
