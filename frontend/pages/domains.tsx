@@ -9,6 +9,13 @@ import { Search, Filter, Grid, List, AlertCircle, RefreshCw, Plus } from 'lucide
 import Link from 'next/link';
 import { useDomainAnalytics, useSearchDomains, type DomainAnalytics } from '@/hooks/useDomainData';
 
+// Utility function to format USDC amounts (6 decimals) for display
+const formatUSDC = (amount: string | number): string => {
+  const numAmount = typeof amount === 'string' ? parseInt(amount) : amount;
+  const usdcAmount = numAmount / 1_000_000; // Convert from 6 decimals to human readable
+  return usdcAmount.toLocaleString();
+};
+
 interface EnhancedDomain extends DomainAnalytics {
   valuation: {
     estimatedValue: number;
@@ -198,7 +205,7 @@ const DomainsPage: NextPage = () => {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-500">Estimated Value:</span>
-                      <div className="font-semibold">${domain.valuation.estimatedValue.toLocaleString()}</div>
+                      <div className="font-semibold">${formatUSDC(domain.valuation.estimatedValue)}</div>
                     </div>
                   </div>
 

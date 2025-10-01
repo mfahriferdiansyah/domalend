@@ -27,7 +27,8 @@ const DomainDetailPage: NextPage = () => {
   const domainId = typeof id === 'string' ? id : '';
 
   // Utility function to truncate token ID
-  const truncateTokenId = (tokenId: string, startChars = 8, endChars = 8) => {
+  const truncateTokenId = (tokenId: string | undefined, startChars = 8, endChars = 8) => {
+    if (!tokenId) return 'N/A';
     if (tokenId.length <= startChars + endChars) return tokenId;
     return `${tokenId.slice(0, startChars)}...${tokenId.slice(-endChars)}`;
   };
@@ -54,7 +55,7 @@ const DomainDetailPage: NextPage = () => {
     );
   }
 
-  if (error || !domain) {
+  if (error || !domain || !domain.domainTokenId) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Link href="/domains" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">

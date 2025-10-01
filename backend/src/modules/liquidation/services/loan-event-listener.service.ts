@@ -8,19 +8,17 @@ import { LiquidationTracking } from '../../../core/database/entities/liquidation
 
 interface PonderLoanEvent {
   id: string;
-  eventType: string;
   loanId: string;
   borrowerAddress: string;
   domainTokenId: string;
   domainName?: string;
-  loanAmount: string;
+  originalAmount: string;
   interestRate?: number;
   poolId?: string;
-  requestId?: string;
   repaymentDeadline: string;
-  eventTimestamp: string;
-  transactionHash: string;
-  blockNumber: string;
+  createdAt: string;
+  lastUpdated: string;
+  status: string;
 }
 
 @Injectable()
@@ -85,33 +83,27 @@ export class LoanEventListenerService {
 
     const query = `
       query GetNewLoanEvents {
-        loanEvents(
+        loans(
           where: {
-            eventType_in: ["created_instant", "created_crowdfunded"]
+            status_in: ["active", "created"]
           }
-          orderBy: "eventTimestamp"
+          orderBy: "createdAt"
           orderDirection: "asc"
           limit: 100
         ) {
           items {
             id
-            eventType
             loanId
             borrowerAddress
             domainTokenId
             domainName
-            loanAmount
+            originalAmount
             interestRate
             poolId
-            requestId
             repaymentDeadline
-            eventTimestamp
-            transactionHash
-            blockNumber
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
+            createdAt
+            lastUpdated
+            status
           }
         }
       }
@@ -131,18 +123,18 @@ export class LoanEventListenerService {
         throw new Error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
       }
 
-      const loanEvents = response.data.data?.loanEvents?.items || [];
+      const loans = response.data.data?.loans?.items || [];
 
-      // Filter events newer than our last processed timestamp
+      // Filter loans newer than our last processed timestamp
       const lastTimestampMs = this.lastProcessedTimestamp.getTime();
-      const filteredEvents = loanEvents.filter(event => {
-        const eventTimestampMs = parseInt(event.eventTimestamp);
-        return eventTimestampMs > lastTimestampMs;
+      const filteredLoans = loans.filter(loan => {
+        const createdAtMs = new Date(loan.createdAt).getTime();
+        return createdAtMs > lastTimestampMs;
       });
 
-      this.logger.debug(`Found ${loanEvents.length} total events, ${filteredEvents.length} new events since ${this.lastProcessedTimestamp.toISOString()}`);
+      this.logger.debug(`Found ${loans.length} total loans, ${filteredLoans.length} new loans since ${this.lastProcessedTimestamp.toISOString()}`);
 
-      return filteredEvents;
+      return filteredLoans;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNREFUSED') {
@@ -167,10 +159,10 @@ export class LoanEventListenerService {
         return;
       }
 
-      // Parse repayment deadline (convert string milliseconds to Date)
-      const dueDate = new Date(parseInt(event.repaymentDeadline));
+      // Parse repayment deadline (convert string to Date)
+      const dueDate = new Date(event.repaymentDeadline);
       if (isNaN(dueDate.getTime())) {
-        this.logger.error(`Invalid repayment deadline for loan ${event.loanId}: ${event.repaymentDeadline} (could not parse as timestamp)`);
+        this.logger.error(`Invalid repayment deadline for loan ${event.loanId}: ${event.repaymentDeadline}`);
         return;
       }
 
@@ -180,14 +172,14 @@ export class LoanEventListenerService {
         borrower: event.borrowerAddress,
         domainTokenId: event.domainTokenId,
         domainName: event.domainName || `domain-${event.domainTokenId}`,
-        principalAmount: event.loanAmount,
-        totalOwed: event.loanAmount, // For now, will be updated when we calculate interest
+        principalAmount: event.originalAmount,
+        totalOwed: event.originalAmount, // For now, will be updated when we calculate interest
         interestRate: event.interestRate,
         dueDate,
         status: 'pending',
         liquidationAttempts: 0,
         poolId: event.poolId,
-        requestId: event.requestId,
+        requestId: null, 
         isDefault: false,
         ponderEventId: event.id,
       });

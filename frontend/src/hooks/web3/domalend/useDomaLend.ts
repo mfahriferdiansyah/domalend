@@ -1,6 +1,6 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig, useAccount } from 'wagmi';
 import { useState, useCallback } from 'react';
-import { parseEther, formatEther, Address, parseUnits, maxUint256 } from 'viem';
+import { parseEther, Address, parseUnits, maxUint256 } from 'viem';
 import { readContract, simulateContract } from '@wagmi/core';
 
 // Contract ABIs - These would be imported from your ABIs folder
@@ -906,21 +906,52 @@ export function useInstantLoanEligibility(
   poolId: string | undefined,
   amount: string | undefined
 ) {
+  const { address } = useAccount();
+  
+  // Prepare contract arguments
+  const contractArgs: readonly [bigint, bigint, bigint] | undefined = domainTokenId && poolId && amount ? [
+    BigInt(domainTokenId),
+    BigInt(poolId),
+    parseUnits(amount, 6) // Use 6 decimals for USDC
+  ] as const : undefined;
+  
+  // Log all parameters when they change
+  console.log('🔍 SATORU_LENDING.canGetInstantLoan() Parameters:', {
+    contractAddress: CONTRACT_ADDRESSES.SATORU_LENDING,
+    connectedAddress: address,
+    domainTokenId,
+    poolId,
+    amount,
+    contractArgs: contractArgs ? [
+      contractArgs[0].toString(), // BigInt domainTokenId as string
+      contractArgs[1].toString(), // BigInt poolId as string
+      contractArgs[2].toString(), // BigInt amount as string (in USDC 6 decimals)
+    ] : undefined,
+    amountInUSDC: amount,
+    enabled: !!(domainTokenId && poolId && amount)
+  });
+
   const { data, isLoading, error } = useReadContract({
     address: CONTRACT_ADDRESSES.SATORU_LENDING,
     abi: SATORU_LENDING_ABI,
     functionName: 'canGetInstantLoan',
-    args: domainTokenId && poolId && amount ? [
-      BigInt(domainTokenId),
-      BigInt(poolId),
-      parseEther(amount)
-    ] : undefined,
+    args: contractArgs,
+    account: address,
     query: {
-      enabled: !!(domainTokenId && poolId && amount)
+      enabled: !!(domainTokenId && poolId && amount && address)
     }
   });
 
   const [eligible, reason] = data as [boolean, string] || [false, ''];
+  
+  // Log the response from contract
+  console.log('📋 SATORU_LENDING.canGetInstantLoan() Response:', {
+    eligible,
+    reason,
+    isLoading,
+    error: error?.message,
+    rawData: data
+  });
 
   return {
     eligible,

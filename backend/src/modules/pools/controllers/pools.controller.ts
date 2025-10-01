@@ -24,7 +24,8 @@ import {
   GetPoolsResponseDto,
   GetUserPoolsResponseDto,
   GetPoolDetailResponseDto,
-  LoanDto
+  LoanDto,
+  PoolHistoryEventDto
 } from '../dto/pool.dto';
 
 @ApiTags('pools')
@@ -136,6 +137,13 @@ export class PoolsController {
     type: Boolean,
     example: false
   })
+  @ApiQuery({
+    name: 'includeHistory',
+    description: 'Whether to include pool history events',
+    required: false,
+    type: Boolean,
+    example: false
+  })
   @ApiResponse({
     status: 200,
     description: 'Pool details retrieved successfully',
@@ -145,11 +153,13 @@ export class PoolsController {
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async getPoolDetail(
     @Param('poolId') poolId: string,
-    @Query('includeLoans') includeLoans?: string
+    @Query('includeLoans') includeLoans?: string,
+    @Query('includeHistory') includeHistory?: string
   ): Promise<GetPoolDetailResponseDto> {
-    this.logger.log(`Getting pool detail for poolId: ${poolId}, includeLoans: ${includeLoans}`);
+    this.logger.log(`Getting pool detail for poolId: ${poolId}, includeLoans: ${includeLoans}, includeHistory: ${includeHistory}`);
 
     const shouldIncludeLoans = includeLoans === 'true';
+    const shouldIncludeHistory = includeHistory === 'true';
 
     try {
       // Get pool from pool table
@@ -178,6 +188,15 @@ export class PoolsController {
           const loanData = await this.indexerService.queryLoansByPool(poolId, 50);
           result.loans = this.buildLoanObjects(loanData.loans?.items || []);
         }
+      }
+
+      // Include pool history if requested
+      if (shouldIncludeHistory) {
+        const poolHistoryData = await this.indexerService.queryPoolHistory({
+          where: { poolId },
+          limit: 100 // Limit to most recent 100 events
+        });
+        result.poolHistory = this.buildPoolHistoryObjects(poolHistoryData.poolHistorys?.items || []);
       }
 
       return result;
@@ -375,6 +394,23 @@ export class PoolsController {
         liquidationTimestamp: loan.liquidationTimestamp
       };
     });
+  }
+
+  private buildPoolHistoryObjects(poolHistoryEvents: any[]): PoolHistoryEventDto[] {
+    return poolHistoryEvents
+      .map(event => ({
+        id: event.id,
+        poolId: event.poolId,
+        eventType: event.eventType,
+        providerAddress: event.providerAddress || undefined,
+        liquidityAmount: event.liquidityAmount || undefined,
+        minAiScore: event.minAiScore || undefined,
+        interestRate: event.interestRate || undefined,
+        eventTimestamp: new Date(parseInt(event.eventTimestamp)).toISOString(),
+        blockNumber: event.blockNumber?.toString() || '0',
+        transactionHash: event.transactionHash
+      }))
+      .sort((a, b) => new Date(b.eventTimestamp).getTime() - new Date(a.eventTimestamp).getTime()); // Most recent first
   }
 
   private buildPoolWhereClause(filters: { minAiScore?: number; status?: string }): any {

@@ -244,11 +244,9 @@ export class IndexerService {
           borrowerAddress
           domainTokenId
           domainName
-          loanAmount
+          originalAmount
           aiScore
           interestRate
-          eventType
-          eventTimestamp
           repaymentDeadline
           liquidationAttempted
           liquidationTimestamp
@@ -261,13 +259,11 @@ export class IndexerService {
           domainTokenId
           domainName
           borrowerAddress
-          bidderAddress
+          currentBidderAddress
           startingPrice
           currentPrice
           finalPrice
           recoveryRate
-          eventType
-          eventTimestamp
         }
       }
       scoringEvents {
