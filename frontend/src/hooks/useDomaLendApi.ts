@@ -113,11 +113,11 @@ export function useUserPools(userAddress: string | undefined) {
   return useApi(apiCall, { immediate: !!userAddress });
 }
 
-export function usePool(poolId: string | undefined, includeLoans = true) {
+export function usePool(poolId: string | undefined, includeLoans = true, includeHistory = false) {
   const apiCall = useCallback(async () => {
     if (!poolId) throw new Error('Pool ID is required');
-    return domaLendAPI.getPoolById(poolId, includeLoans);
-  }, [poolId, includeLoans]);
+    return domaLendAPI.getPoolById(poolId, includeLoans, includeHistory);
+  }, [poolId, includeLoans, includeHistory]);
 
   return useApi(apiCall, { immediate: !!poolId });
 }
@@ -299,6 +299,26 @@ export function useUserDomains(address: string | undefined) {
     
     if (!response.ok) {
       throw new Error(`Failed to fetch user domains: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }, [address]);
+
+  return useApi(apiCall, { immediate: !!address });
+}
+
+export function useUserScoredDomains(address: string | undefined) {
+  const apiCall = useCallback(async () => {
+    if (!address) throw new Error('Address is required');
+    const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'https://backend-doma.kadzu.dev';
+    const response = await fetch(`${backendApiUrl}/domains/user/${address}/scored`, {
+      headers: {
+        'accept': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user scored domains: ${response.statusText}`);
     }
     
     return response.json();

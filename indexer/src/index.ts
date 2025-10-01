@@ -4,19 +4,18 @@ import { BackendApiService } from "./services/backend-api.service";
 import { DomainResolutionService } from "./services/domain-resolution.service";
 // Wallet imports removed - all contract calls now handled by backend
 import {
-  scoringEvent,
-  loan,
-  loanHistory,
   auction,
   auctionHistory,
+  batchOperation,
+  domainAnalytics,
+  loan,
+  loanFunding,
+  loanHistory,
+  loanRequest,
   pool,
   poolHistory,
-  loanRequest,
-  loanFunding,
-  dailyMetrics,
-  domainAnalytics,
-  systemEvent,
-  batchOperation
+  scoringEvent,
+  systemEvent
 } from "../ponder.schema.js";
 
 // Initialize services

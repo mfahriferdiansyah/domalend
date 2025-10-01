@@ -330,6 +330,131 @@ export class DomainController {
     }
   }
 
+  @Get('user/:address/scored')
+  @ApiOperation({
+    summary: 'Get user-owned unliquidated scored domains',
+    description: 'Retrieve scored domains that the user actually owns and have not been liquidated, filtered from both Doma Protocol ownership and indexer scoring data'
+  })
+  @ApiParam({
+    name: 'address',
+    description: 'User wallet address',
+    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User-owned unliquidated scored domains retrieved successfully',
+    type: GetUserDomainsResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Invalid Ethereum address format' })
+  @ApiResponse({ status: 500, description: 'Failed to fetch user scored domains' })
+  async getUserScoredDomains(@Param('address') address: string): Promise<{
+    address: string;
+    scoredDomains: EnhancedDomainDto[];
+    totalCount: number;
+  }> {
+    this.logger.log(`Getting user-owned scored domains for address: ${address}`);
+
+    if (!ethers.isAddress(address)) {
+      throw new HttpException('Invalid Ethereum address', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      // Step 1: Get all domains owned by the user from Doma Protocol
+      const ownedDomainsData = await this.domaNftService.getNFTBalanceForAddress(address);
+      const ownedTokenIds = ownedDomainsData.ownedNFTs.map(domain => domain.tokenId);
+
+      this.logger.log(`User owns ${ownedTokenIds.length} domains from Doma Protocol`);
+
+      if (ownedTokenIds.length === 0) {
+        return {
+          address: address.toLowerCase(),
+          scoredDomains: [],
+          totalCount: 0
+        };
+      }
+
+      // Step 2: Get all scored domains from indexer that match user's owned domains
+      // Filter out liquidated domains as they cannot be used for new loans
+      const scoredDomainsData = await this.indexerService.queryDomains({
+        where: {
+          domainTokenId_in: ownedTokenIds,
+          hasBeenLiquidated: false // Only show unliquidated domains
+        },
+        limit: 1000, // Get all matches
+        orderBy: 'latestAiScore',
+        orderDirection: 'desc'
+      });
+
+      const scoredDomains = scoredDomainsData.domainAnalyticss?.items || [];
+      this.logger.log(`Found ${scoredDomains.length} unliquidated scored domains matching user's ownership`);
+
+      // Step 3: Create a map of owned domains for quick lookup
+      const ownedDomainsMap = new Map(
+        ownedDomainsData.ownedNFTs.map(domain => [domain.tokenId, domain])
+      );
+
+      // Step 4: Build enhanced domain objects with both ownership and scoring data
+      const enhancedScoredDomains: EnhancedDomainDto[] = [];
+
+      for (const scoredDomain of scoredDomains) {
+        const ownedDomain = ownedDomainsMap.get(scoredDomain.domainTokenId);
+        
+        if (ownedDomain) {
+          const enhancedDomain: EnhancedDomainDto = {
+            // Base domain info from Doma Protocol
+            tokenId: ownedDomain.tokenId,
+            name: ownedDomain.name,
+            owner: ownedDomain.owner,
+            description: ownedDomain.description || '',
+            image: ownedDomain.image || '',
+            externalUrl: ownedDomain.externalUrl || '',
+            attributes: ownedDomain.attributes || [],
+            
+            // AI scoring info from indexer
+            aiScore: {
+              score: scoredDomain.latestAiScore,
+              confidence: 85, // Default confidence since not in analytics
+              lastUpdated: scoredDomain.firstScoreTimestamp,
+              factors: {
+                age: Math.round(scoredDomain.latestAiScore * 0.2),
+                extension: Math.round(scoredDomain.latestAiScore * 0.15),
+                length: Math.round(scoredDomain.latestAiScore * 0.1),
+                keywords: Math.round(scoredDomain.latestAiScore * 0.25),
+                traffic: Math.round(scoredDomain.latestAiScore * 0.3)
+              }
+            },
+            
+            // Loan history from indexer
+            loanHistory: {
+              totalLoans: scoredDomain.totalLoansCreated || 0,
+              totalBorrowed: scoredDomain.totalLoanVolume || '0',
+              currentlyCollateralized: false, // Would need additional query to determine
+              averageLoanAmount: scoredDomain.totalLoansCreated > 0 
+                ? (BigInt(scoredDomain.totalLoanVolume || '0') / BigInt(scoredDomain.totalLoansCreated)).toString()
+                : '0',
+              successfulRepayments: 0, // Would need additional query
+              liquidations: scoredDomain.hasBeenLiquidated ? 1 : 0
+            }
+          };
+
+          enhancedScoredDomains.push(enhancedDomain);
+        }
+      }
+
+      return {
+        address: address.toLowerCase(),
+        scoredDomains: enhancedScoredDomains,
+        totalCount: enhancedScoredDomains.length
+      };
+    } catch (error) {
+      this.logger.error(`Error getting user scored domains for address ${address}:`, error.message);
+      throw new HttpException(
+        `Failed to get user scored domains: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Get('user/:address')
   @ApiOperation({
     summary: 'Get enhanced domain portfolio by user (Portfolio Tab 1)',

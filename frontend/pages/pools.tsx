@@ -10,6 +10,7 @@ import { usePools as usePoolsRaw } from '@/hooks/useDomaLendApi';
 import { ApiErrorState } from '@/components/common/api-error-boundary';
 import { GridLoadingState } from '@/components/common/api-loading-state';
 import { useDomaLend } from '@/hooks/web3/domalend/useDomaLend';
+import { formatUSDC, formatBasisPoints } from '@/utils/formatting';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -23,6 +24,30 @@ import {
 } from 'lucide-react';
 import { NextPage } from 'next';
 import Link from 'next/link';
+
+// Helper function to format APY with smart detection
+const formatAPY = (apy: string | number | undefined, interestRate?: string | number): string => {
+  // Use interestRate first if available (raw basis points)
+  if (interestRate) {
+    return formatBasisPoints(interestRate) + '%';
+  }
+  
+  if (!apy) return '0.00%';
+  
+  // Remove % symbol if present and parse
+  const apyStr = apy.toString().replace('%', '');
+  const apyNum = parseFloat(apyStr);
+  
+  if (isNaN(apyNum)) return '0.00%';
+  
+  // If value is greater than 100, likely basis points
+  if (apyNum > 100) {
+    return formatBasisPoints(apyNum) + '%';
+  }
+  
+  // Otherwise treat as already formatted percentage
+  return apyNum.toFixed(2) + '%';
+};
 
 const PoolsPage: NextPage = () => {
   const { data: pools, loading, error, refetch } = usePoolData();
@@ -224,10 +249,10 @@ const PoolsPage: NextPage = () => {
               <div>
                 <p className="text-sm text-gray-600">Total Liquidity</p>
                 <p className="text-2xl font-bold">
-                  ${pools.reduce((acc, pool) => {
+                  ${formatUSDC(pools.reduce((acc, pool) => {
                     const liquidity = parseFloat(pool.totalLiquidity || '0');
                     return acc + (isNaN(liquidity) ? 0 : liquidity);
-                  }, 0).toLocaleString()}
+                  }, 0))}
                 </p>
               </div>
               <Droplets className="h-8 w-8 text-blue-500" />
@@ -243,7 +268,8 @@ const PoolsPage: NextPage = () => {
                 <p className="text-2xl font-bold text-green-600">
                   {pools.length > 0
                     ? (pools.reduce((acc, pool) => {
-                      const apy = parseFloat(pool.apy?.replace('%', '') || '0');
+                      const apyStr = formatAPY(pool.apy, pool.interestRate).replace('%', '');
+                      const apy = parseFloat(apyStr);
                       return acc + (isNaN(apy) ? 0 : apy);
                     }, 0) / pools.length).toFixed(1)
                     : '0.0'}%
@@ -294,18 +320,20 @@ const PoolsPage: NextPage = () => {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">APY</span>
-                    <div className="font-semibold text-green-600">{pool.apy}</div>
+                    <div className="font-semibold text-green-600">
+                      {formatAPY(pool.apy, pool.interestRate)}
+                    </div>
                   </div>
                   <div>
                     <span className="text-gray-600">Total Liquidity</span>
                     <div className="font-semibold">
-                      ${(parseInt(pool.totalLiquidity || '0') || 0).toLocaleString()}
+                      ${formatUSDC(pool.totalLiquidity || '0')}
                     </div>
                   </div>
                   <div>
                     <span className="text-gray-600">Available</span>
                     <div className="font-semibold">
-                      ${(parseInt(pool.availableLiquidity || '0') || 0).toLocaleString()}
+                      ${formatUSDC(pool.availableLiquidity || '0')}
                     </div>
                   </div>
                   <div>
@@ -316,7 +344,7 @@ const PoolsPage: NextPage = () => {
 
                 <div className="text-xs text-gray-500">
                   <div>
-                    Loan Range: ${(parseInt(pool.minLoanAmount || '0') || 0).toLocaleString()} - ${(parseInt(pool.maxLoanAmount || '0') || 0).toLocaleString()}
+                    Loan Range: ${formatUSDC(pool.minLoanAmount || '0')} - ${formatUSDC(pool.maxLoanAmount || '0')}
                   </div>
                   <div>LTV Ratio: {pool.loanToValueRatio}</div>
                 </div>

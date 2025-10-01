@@ -456,7 +456,7 @@ class DomaLendAPI {
     return response.data;
   }
 
-  async getPoolById(poolId: string, includeLoans = true): Promise<{
+  async getPoolById(poolId: string, includeLoans = true, includeHistory = false): Promise<{
     pool: {
       poolId: string;
       creator: string;
@@ -484,9 +484,21 @@ class DomaLendAPI {
       liquidationAttempted: boolean;
       liquidationTimestamp: string | null;
     }>;
+    poolHistory?: Array<{
+      id: string;
+      poolId: string;
+      eventType: string;
+      providerAddress?: string;
+      liquidityAmount?: string;
+      minAiScore?: number;
+      interestRate?: number;
+      eventTimestamp: string;
+      blockNumber: string;
+      transactionHash: string;
+    }>;
   }> {
     const response = await this.api.get(`/pools/${poolId}`, {
-      params: { includeLoans }
+      params: { includeLoans, includeHistory }
     });
     return response.data;
   }

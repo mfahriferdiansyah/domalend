@@ -1,34 +1,33 @@
 import {
   Controller,
   Get,
-  Param,
   HttpException,
   HttpStatus,
-  Logger
+  Logger,
+  Param
 } from '@nestjs/common';
 import {
-  ApiTags,
   ApiOperation,
+  ApiParam,
   ApiResponse,
-  ApiParam
+  ApiTags
 } from '@nestjs/swagger';
 import { ethers } from 'ethers';
 
-import { IndexerService } from '../../indexer/indexer.service';
+import { EnhancedDomainDto } from '../../domain/dto/domain.dto';
 import { DomaNftService } from '../../domain/services/doma-nft.service';
 import { DomainScoreCacheService } from '../../domain/services/domain-score-cache.service';
+import { IndexerService } from '../../indexer/indexer.service';
 import {
-  UserDashboardDto,
-  GetUserDashboardResponseDto,
-  DashboardStatsDto,
-  ActiveLoanDto,
-  UserLoanDto,
-  LiquidityPositionDto,
   AuctionOpportunityDto,
+  DashboardStatsDto,
+  DomainNFTDto,
+  GetUserDashboardResponseDto,
+  LiquidityPositionDto,
   RecentActivityDto,
-  DomainNFTDto
+  UserDashboardDto,
+  UserLoanDto
 } from '../dto/dashboard.dto';
-import { EnhancedDomainDto } from '../../domain/dto/domain.dto';
 
 @ApiTags('dashboard')
 @Controller('dashboard')
