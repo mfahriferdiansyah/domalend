@@ -476,6 +476,7 @@ ponder.on("SatoruLending:PoolCreated", async ({ event, context }) => {
       poolId: poolId.toString(),
       creatorAddress: creator,
       totalLiquidity: initialLiquidity.toString(),
+      availableLiquidity: initialLiquidity.toString(),
       minAiScore: Number(minAiScore),
       interestRate: Number(interestRate),
       participantCount: 1,
@@ -518,9 +519,11 @@ ponder.on("SatoruLending:LiquidityAdded", async ({ event, context }) => {
     const existingPool = await context.db.find(pool, { id: poolId.toString() });
     if (existingPool) {
       const newTotalLiquidity = (BigInt(existingPool.totalLiquidity) + amount).toString();
+      const newAvailableLiquidity = (BigInt(existingPool.availableLiquidity) + amount).toString();
       await context.db.update(pool, { id: poolId.toString() })
         .set({
           totalLiquidity: newTotalLiquidity,
+          availableLiquidity: newAvailableLiquidity,
           lastUpdated: timestamp,
         });
     }
@@ -555,9 +558,11 @@ ponder.on("SatoruLending:LiquidityRemoved", async ({ event, context }) => {
     const existingPool = await context.db.find(pool, { id: poolId.toString() });
     if (existingPool) {
       const newTotalLiquidity = (BigInt(existingPool.totalLiquidity) - amount).toString();
+      const newAvailableLiquidity = (BigInt(existingPool.availableLiquidity) - amount).toString();
       await context.db.update(pool, { id: poolId.toString() })
         .set({
           totalLiquidity: newTotalLiquidity,
+          availableLiquidity: newAvailableLiquidity,
           lastUpdated: timestamp,
         });
     }
@@ -729,6 +734,20 @@ ponder.on("LoanManager:LoanRepaid", async ({ event, context }) => {
         blockNumber: event.block.number,
         transactionHash: event.transaction.hash,
       });
+
+      // Update pool's availableLiquidity if loan is from a pool
+      if (existingLoan.poolId) {
+        const existingPool = await context.db.find(pool, { id: existingLoan.poolId });
+        if (existingPool) {
+          const newAvailableLiquidity = (BigInt(existingPool.availableLiquidity) + repaymentAmount).toString();
+          await context.db.update(pool, { id: existingLoan.poolId })
+            .set({
+              availableLiquidity: newAvailableLiquidity,
+              lastUpdated: timestamp,
+            });
+          console.log(`📈 [LoanManager] Pool ${existingLoan.poolId} available liquidity increased by ${repaymentAmount}`);
+        }
+      }
     }
 
     console.log(`✅ [LoanManager] Loan repayment recorded for loan ${loanId}`);
@@ -764,7 +783,7 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
       auctionId: auctionId.toString(),
       loanId: loanId.toString(),
       domainTokenId: domainTokenId.toString(),
-      domainName,
+      domainName: resolvedDomainName,
       borrowerAddress: existingLoan?.borrowerAddress,
       aiScore: existingLoan?.aiScore,
       startingPrice: startingPrice.toString(),
@@ -870,6 +889,21 @@ ponder.on("DutchAuction:AuctionEnded", async ({ event, context }) => {
       transactionHash: event.transaction.hash,
     });
 
+    // Restore pool's availableLiquidity if loan was from a pool
+    const liquidatedLoan = await context.db.find(loan, { id: loanId.toString() });
+    if (liquidatedLoan?.poolId) {
+      const existingPool = await context.db.find(pool, { id: liquidatedLoan.poolId });
+      if (existingPool) {
+        const newAvailableLiquidity = (BigInt(existingPool.availableLiquidity) + finalPrice).toString();
+        await context.db.update(pool, { id: liquidatedLoan.poolId })
+          .set({
+            availableLiquidity: newAvailableLiquidity,
+            lastUpdated: eventTimestamp,
+          });
+        console.log(`♻️ [DutchAuction] Pool ${liquidatedLoan.poolId} liquidity restored by ${finalPrice} from auction sale`);
+      }
+    }
+
     console.log(`✅ [DutchAuction] Auction completion recorded: ${auctionId} (recovery: ${(recoveryRate * 100).toFixed(2)}%)`);
   } catch (error) {
     console.error(`❌ [DutchAuction] Failed to process auction ended event:`, error);
@@ -901,6 +935,26 @@ ponder.on("DutchAuction:AuctionCancelled", async ({ event, context }) => {
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
+
+    // Restore pool liquidity if auction cancelled and loan NOT repaid
+    const cancelledAuction = await context.db.find(auction, { id: auctionId.toString() });
+    if (cancelledAuction?.loanId) {
+      const cancelledLoan = await context.db.find(loan, { id: cancelledAuction.loanId });
+      if (cancelledLoan?.poolId && cancelledLoan.status !== 'repaid') {
+        // Only restore if loan wasn't repaid (LoanRepaid event would have already restored it)
+        const existingPool = await context.db.find(pool, { id: cancelledLoan.poolId });
+        if (existingPool) {
+          const restoreAmount = BigInt(cancelledLoan.currentBalance); // Restore remaining balance
+          const newAvailableLiquidity = (BigInt(existingPool.availableLiquidity) + restoreAmount).toString();
+          await context.db.update(pool, { id: cancelledLoan.poolId })
+            .set({
+              availableLiquidity: newAvailableLiquidity,
+              lastUpdated: eventTimestamp,
+            });
+          console.log(`♻️ [DutchAuction] Pool ${cancelledLoan.poolId} liquidity restored by ${restoreAmount} from cancelled auction`);
+        }
+      }
+    }
 
     console.log(`✅ [DutchAuction] Auction cancellation recorded: ${auctionId} (reason: ${reason})`);
   } catch (error) {
@@ -967,6 +1021,20 @@ ponder.on("LoanManager:LoanCreated", async ({ event, context }) => {
       blockNumber: event.block.number,
       transactionHash: event.transaction.hash,
     });
+
+    // Update pool's availableLiquidity if loan is from a pool
+    if (poolId && poolId > 0n) {
+      const existingPool = await context.db.find(pool, { id: poolId.toString() });
+      if (existingPool) {
+        const newAvailableLiquidity = (BigInt(existingPool.availableLiquidity) - principalAmount).toString();
+        await context.db.update(pool, { id: poolId.toString() })
+          .set({
+            availableLiquidity: newAvailableLiquidity,
+            lastUpdated: timestamp,
+          });
+        console.log(`📉 [LoanManager] Pool ${poolId} available liquidity decreased by ${principalAmount}`);
+      }
+    }
 
     console.log(`✅ [LoanManager] Loan creation recorded for ${loanId}`);
   } catch (error) {
