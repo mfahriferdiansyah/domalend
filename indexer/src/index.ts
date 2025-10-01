@@ -462,7 +462,7 @@ ponder.on("SatoruLending:InstantLoanExecuted", async ({ event, context }) => {
  * POOL MANAGEMENT: Track liquidity pool lifecycle
  */
 ponder.on("SatoruLending:PoolCreated", async ({ event, context }) => {
-  const { poolId, creator, initialLiquidity, minAiScore, interestRate } = event.args;
+  const { poolId, creator, initialLiquidity, minAiScore, interestRate, maxDomainExpiration, minLoanAmount, maxLoanAmount, minDuration, maxDuration, allowAdditionalProviders } = event.args;
 
   console.log(`🏦 [SatoruLending] Pool created: ${poolId} by ${creator} with ${initialLiquidity} liquidity`);
 
@@ -477,7 +477,13 @@ ponder.on("SatoruLending:PoolCreated", async ({ event, context }) => {
       totalLiquidity: initialLiquidity.toString(),
       availableLiquidity: initialLiquidity.toString(),
       minAiScore: Number(minAiScore),
+      maxDomainExpiration: maxDomainExpiration,
       interestRate: Number(interestRate),
+      minLoanAmount: minLoanAmount.toString(),
+      maxLoanAmount: maxLoanAmount.toString(),
+      minDuration: minDuration,
+      maxDuration: maxDuration,
+      allowAdditionalProviders: allowAdditionalProviders,
       participantCount: 1,
       status: 'active',
       createdAt: timestamp,
@@ -787,8 +793,11 @@ ponder.on("DutchAuction:AuctionStarted", async ({ event, context }) => {
       aiScore: existingLoan?.aiScore,
       startingPrice: startingPrice.toString(),
       currentPrice: startingPrice.toString(),
+      reservePrice: reservePrice.toString(),
+      loanAmount: existingLoan?.originalAmount,
       status: 'active',
       startedAt: timestamp,
+      endTimestamp: new Date(Number(endTimestamp) * 1000),
       lastUpdated: timestamp,
       createdAt: timestamp,
       blockNumber: event.block.number,
@@ -988,9 +997,12 @@ ponder.on("LoanManager:LoanCreated", async ({ event, context }) => {
       domainTokenId: domainTokenId.toString(),
       domainName,
       originalAmount: principalAmount.toString(),
+      totalOwed: totalOwed.toString(),
       currentBalance: principalAmount.toString(),
       totalRepaid: "0",
       interestRate: Number(interestRate),
+      duration: duration,
+      startTime: timestamp,
       poolId: poolId ? poolId.toString() : undefined,
       status: 'active',
       repaymentDeadline: new Date(Number(dueDate) * 1000),
