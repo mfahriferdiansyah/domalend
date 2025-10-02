@@ -12,9 +12,12 @@ import {
   loanFunding,
   loanHistory,
   loanRequest,
+  paidScoreRequest,
+  paidScoreSubmission,
   pool,
   poolHistory,
   scoringEvent,
+  serviceManager,
   systemEvent
 } from "../ponder.schema.js";
 
@@ -391,6 +394,211 @@ ponder.on("AIOracle:EmergencyPauseToggled", async ({ event, context }) => {
 });
 
 /**
+ * PAID SCORING: Handle paid scoring request events
+ */
+ponder.on("AIOracle:PaidScoringRequested", async ({ event, context }) => {
+  const { requestId, domainTokenId, requester, paymentToken, paymentAmount, timestamp } = event.args;
+  const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
+
+  console.log(`💰 [AIOracle] Paid scoring requested: requestId ${requestId} for domain ${domainTokenId} by ${requester}`);
+
+  try {
+    // Insert paid score request record
+    await context.db.insert(paidScoreRequest).values({
+      id: requestId.toString(),
+      requestId: requestId.toString(),
+      domainTokenId: domainTokenId.toString(),
+      requesterAddress: requester,
+      paymentToken: paymentToken,
+      paymentAmount: paymentAmount.toString(),
+      status: 'pending',
+      requestTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    console.log(`✅ [AIOracle] Paid scoring request recorded: requestId ${requestId}`);
+  } catch (error) {
+    console.error(`❌ [AIOracle] Failed to process paid scoring request:`, error);
+  }
+});
+
+ponder.on("AIOracle:PaidScoreSubmitted", async ({ event, context }) => {
+  const { requestId, domainTokenId, score, serviceManager, rewardRecipient, rewardAmount, timestamp } = event.args;
+  const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
+
+  console.log(`✅ [AIOracle] Paid score submitted: requestId ${requestId}, domain ${domainTokenId}, score ${score} by ${serviceManager}`);
+
+  try {
+    const submissionTimestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // 1. Insert paid score submission record
+    await context.db.insert(paidScoreSubmission).values({
+      id: eventId,
+      requestId: requestId.toString(),
+      domainTokenId: domainTokenId.toString(),
+      score: Number(score),
+      serviceManagerAddress: serviceManager,
+      rewardRecipient: rewardRecipient,
+      rewardAmount: rewardAmount.toString(),
+      submissionTimestamp,
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    // 2. Update paid score request status to completed
+    await context.db.update(paidScoreRequest, { id: requestId.toString() })
+      .set({
+        status: 'completed',
+        rewardRecipient: rewardRecipient,
+        completionTimestamp: submissionTimestamp,
+      });
+
+    // 3. Update service manager stats
+    const existingManager = await context.db.find(serviceManager, { id: serviceManager });
+    if (existingManager) {
+      await context.db.update(serviceManager, { id: serviceManager })
+        .set({
+          totalScoresSubmitted: existingManager.totalScoresSubmitted + 1,
+          totalRewardsEarned: (BigInt(existingManager.totalRewardsEarned) + rewardAmount).toString(),
+          lastActivityAt: submissionTimestamp,
+        });
+    }
+
+    // 4. Update domain analytics with the new score
+    const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+    await updateDomainAnalytics(
+      context,
+      domainTokenId,
+      domainName,
+      Number(score)
+    );
+
+    console.log(`✅ [AIOracle] Paid score submission processed: requestId ${requestId}, score ${score}`);
+  } catch (error) {
+    console.error(`❌ [AIOracle] Failed to process paid score submission:`, error);
+  }
+});
+
+ponder.on("AIOracle:PaymentTokenUpdated", async ({ event, context }) => {
+  const { oldToken, newToken } = event.args;
+  const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
+
+  console.log(`🔧 [AIOracle] Payment token updated from ${oldToken} to ${newToken}`);
+
+  try {
+    // Record the configuration change in system events table
+    await context.db.insert(systemEvent).values({
+      id: eventId,
+      eventType: 'payment_token_updated',
+      contractAddress: process.env.AI_ORACLE_ADDRESS as `0x${string}` || '0x0',
+      triggeredBy: event.transaction.from,
+      oldValue: oldToken,
+      newValue: newToken,
+      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    console.log(`✅ [AIOracle] Payment token update recorded`);
+  } catch (error) {
+    console.error(`❌ [AIOracle] Failed to process payment token update:`, error);
+  }
+});
+
+ponder.on("AIOracle:PaidScoringFeeUpdated", async ({ event, context }) => {
+  const { oldFee, newFee } = event.args;
+  const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
+
+  console.log(`🔧 [AIOracle] Paid scoring fee updated from ${oldFee} to ${newFee}`);
+
+  try {
+    // Record the configuration change in system events table
+    await context.db.insert(systemEvent).values({
+      id: eventId,
+      eventType: 'paid_scoring_fee_updated',
+      contractAddress: process.env.AI_ORACLE_ADDRESS as `0x${string}` || '0x0',
+      triggeredBy: event.transaction.from,
+      oldValue: oldFee.toString(),
+      newValue: newFee.toString(),
+      eventTimestamp: new Date(Number(event.block.timestamp) * 1000),
+      blockNumber: event.block.number,
+      transactionHash: event.transaction.hash,
+    });
+
+    console.log(`✅ [AIOracle] Paid scoring fee update recorded`);
+  } catch (error) {
+    console.error(`❌ [AIOracle] Failed to process paid scoring fee update:`, error);
+  }
+});
+
+ponder.on("AIOracle:ServiceManagerRegistered", async ({ event, context }) => {
+  const { serviceManager: managerAddress } = event.args;
+  const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
+
+  console.log(`🎯 [AIOracle] Service manager registered: ${managerAddress}`);
+
+  try {
+    const registrationTimestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Check if manager already exists (re-registration case)
+    const existingManager = await context.db.find(serviceManager, { id: managerAddress });
+
+    if (existingManager) {
+      // Re-activation of existing manager
+      await context.db.update(serviceManager, { id: managerAddress })
+        .set({
+          isActive: true,
+          lastActivityAt: registrationTimestamp,
+          unregisteredAt: null,
+        });
+      console.log(`✅ [AIOracle] Service manager re-activated: ${managerAddress}`);
+    } else {
+      // New manager registration
+      await context.db.insert(serviceManager).values({
+        id: managerAddress,
+        managerAddress: managerAddress,
+        isActive: true,
+        totalScoresSubmitted: 0,
+        totalRewardsEarned: "0",
+        registeredAt: registrationTimestamp,
+        lastActivityAt: registrationTimestamp,
+      });
+      console.log(`✅ [AIOracle] New service manager registered: ${managerAddress}`);
+    }
+  } catch (error) {
+    console.error(`❌ [AIOracle] Failed to process service manager registration:`, error);
+  }
+});
+
+ponder.on("AIOracle:ServiceManagerUnregistered", async ({ event, context }) => {
+  const { serviceManager: managerAddress } = event.args;
+  const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
+
+  console.log(`❌ [AIOracle] Service manager unregistered: ${managerAddress}`);
+
+  try {
+    const unregistrationTimestamp = new Date(Number(event.block.timestamp) * 1000);
+
+    // Update manager status to inactive
+    const existingManager = await context.db.find(serviceManager, { id: managerAddress });
+    if (existingManager) {
+      await context.db.update(serviceManager, { id: managerAddress })
+        .set({
+          isActive: false,
+          unregisteredAt: unregistrationTimestamp,
+          lastActivityAt: unregistrationTimestamp,
+        });
+      console.log(`✅ [AIOracle] Service manager unregistered: ${managerAddress}`);
+    } else {
+      console.warn(`⚠️ [AIOracle] Attempted to unregister non-existent service manager: ${managerAddress}`);
+    }
+  } catch (error) {
+    console.error(`❌ [AIOracle] Failed to process service manager unregistration:`, error);
+  }
+});
+
+/**
  * ANALYTICS: Track loan events for scoring effectiveness
  */
 ponder.on("SatoruLending:InstantLoanExecuted", async ({ event, context }) => {
@@ -402,7 +610,13 @@ ponder.on("SatoruLending:InstantLoanExecuted", async ({ event, context }) => {
     // Resolve domain name for analytics
     const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
     const timestamp = new Date(Number(event.block.timestamp) * 1000);
-    
+
+    // Calculate totalOwed = principal + interest
+    // interestRate is in basis points (1000 = 10%)
+    const principal = loanAmount;
+    const interest = (loanAmount * BigInt(interestRate)) / BigInt(10000);
+    const totalOwed = principal + interest;
+
     // Insert into main loan table
     await context.db.insert(loan).values({
       id: loanId.toString(),
@@ -411,6 +625,7 @@ ponder.on("SatoruLending:InstantLoanExecuted", async ({ event, context }) => {
       domainTokenId: domainTokenId.toString(),
       domainName,
       originalAmount: loanAmount.toString(),
+      totalOwed: totalOwed.toString(),
       currentBalance: loanAmount.toString(), // Initially same as original
       totalRepaid: "0",
       aiScore: Number(aiScore),
