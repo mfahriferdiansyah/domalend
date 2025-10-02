@@ -1,9 +1,7 @@
 "use client"
 
-import { useTheme } from "next-themes"
-import useCurrentTheme from "@/hooks/styles/theme"
+import { Twitter } from "lucide-react"
 import Link from "next/link"
-import { Twitter, MessageCircle, Github } from "lucide-react"
 
 const resources = [
   // {
@@ -36,9 +34,6 @@ const support = [
 ]
 
 const Footer = () => {
-  const { theme, setTheme } = useTheme()
-  const currentTheme = useCurrentTheme()
-
   return (
     <footer className="text-gray-300 relative overflow-hidden bg-[#0A0A0A]">
       <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-white/10 opacity-30"></div>

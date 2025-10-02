@@ -1,7 +1,6 @@
 import Header from "@/components/header/header";
 import { darkTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
-import { ThemeProvider } from "next-themes";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import Head from "next/head";
@@ -75,19 +74,42 @@ function MyApp({ Component, pageProps }: AppPropsWithLayout) {
           <Head>
             <title>DomaLend - AI-Powered Domain Lending Platform</title>
             <meta name="description" content="Unlock liquidity from your domain NFTs with AI-powered lending on Doma Protocol" />
-            <link rel="icon" type="image/png" href="/favicon.ico" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            
+            {/* Favicon */}
+            <link rel="icon" type="image/x-icon" href="/icons/favicon.ico" />
+            <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+            <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+            
+            {/* Apple Touch Icon */}
+            <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+            
+            {/* Android Chrome Icons */}
+            <link rel="icon" type="image/png" sizes="192x192" href="/icons/android-chrome-192x192.png" />
+            <link rel="icon" type="image/png" sizes="512x512" href="/icons/android-chrome-512x512.png" />
+            
+            {/* Web App Manifest */}
+            <link rel="manifest" href="/icons/site.webmanifest" />
+            
+            {/* Theme Color */}
+            <meta name="theme-color" content="#3b82f6" />
+            <meta name="msapplication-TileColor" content="#3b82f6" />
+            
+            {/* Open Graph / Facebook */}
+            <meta property="og:type" content="website" />
+            <meta property="og:title" content="DomaLend - AI-Powered Domain Lending Platform" />
+            <meta property="og:description" content="Unlock liquidity from your domain NFTs with AI-powered lending on Doma Protocol" />
+            <meta property="og:image" content="/icons/domalend.png" />
+            
+            {/* Twitter */}
+            <meta property="twitter:card" content="summary_large_image" />
+            <meta property="twitter:title" content="DomaLend - AI-Powered Domain Lending Platform" />
+            <meta property="twitter:description" content="Unlock liquidity from your domain NFTs with AI-powered lending on Doma Protocol" />
+            <meta property="twitter:image" content="/icons/domalend.png" />
           </Head>
-          <ThemeProvider
-            disableTransitionOnChange
-            attribute="class"
-            defaultTheme="light"
-            value={{ light: "light", dark: "dark" }}
-          >
-            <AppLayout>
-              {page}
-            </AppLayout>
-          </ThemeProvider>
+          <AppLayout>
+            {page}
+          </AppLayout>
         </RainbowKitProvider>
       </Providers>
     </ClientOnly>
