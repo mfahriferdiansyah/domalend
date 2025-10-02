@@ -1,0 +1,22 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+broadcast/*
+anvil/*
+out/*
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+
+
+# DS_store files
+.DS_Store
+lib/.DS_Store
+
+# Forge dependencies
+lib/

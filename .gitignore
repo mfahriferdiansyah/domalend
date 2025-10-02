@@ -35,9 +35,5 @@ coverage/
 .tmp/
 .temp/
 
-# AVS
-avs/
-avs-2/
-
 # Protect
 protect-fi/
