@@ -1,0 +1,90 @@
+[
+  {
+    "type": "event",
+    "name": "ScoringRequested",
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "domainTokenId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "name": "requester",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ScoreSubmitted",
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "domainTokenId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "score",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "name": "submittedBy",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "submitScore",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "domainTokenId",
+        "type": "uint256"
+      },
+      {
+        "name": "score",
+        "type": "uint256"
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "getScore",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "domainTokenId",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "score",
+        "type": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "name": "isValid",
+        "type": "bool"
+      }
+    ]
+  }
+]

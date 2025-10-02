@@ -5,15 +5,34 @@ interface IDomalendServiceManager {
     event NewTaskCreated(uint32 indexed taskIndex, Task task);
     event TaskResponded(uint32 indexed taskIndex, Task task, address operator);
     event CScoreInserted(address indexed user, uint256 cScore, uint256 timestamp);
+    event DomainScoringTaskCreated(uint32 indexed taskIndex, DomainTask task);
+    event DomainScoreSubmitted(uint256 indexed domainTokenId, uint256 score, string ipfsHash, address operator);
+
+    enum TaskType {
+        WalletCScore,
+        DomainScore
+    }
 
     struct Task {
         address user;
         uint32 taskCreatedBlock;
     }
 
+    struct DomainTask {
+        uint256 domainTokenId;
+        uint32 taskCreatedBlock;
+        TaskType taskType;
+    }
+
     struct CScoreData {
         uint256 cScore;
         uint256 lastUpdate;
+    }
+
+    struct DomainScoreData {
+        uint256 score;
+        uint256 lastUpdate;
+        string ipfsHash;
     }
 
     function getUserCScoreData(
@@ -41,4 +60,20 @@ interface IDomalendServiceManager {
         uint32 referenceTaskIndex,
         bytes calldata signature
     ) external;
+
+    function createDomainScoringTask(
+        uint256 domainTokenId
+    ) external returns (DomainTask memory);
+
+    function respondToDomainTask(
+        DomainTask calldata task,
+        uint256 score,
+        string calldata ipfsHash,
+        uint32 referenceTaskIndex,
+        bytes calldata signature
+    ) external;
+
+    function getDomainScoreData(
+        uint256 domainTokenId
+    ) external view returns (DomainScoreData memory);
 }

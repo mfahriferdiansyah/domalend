@@ -28,6 +28,11 @@ contract DomalendServiceManager is ECDSAServiceManagerBase, IDomalendServiceMana
     mapping(address => mapping(uint32 => bytes)) public allTaskResponses;
     mapping(address => CScoreData) private _userCScoreData;
 
+    // Domain scoring storage
+    mapping(uint32 => bytes32) public domainTaskHashes;
+    mapping(uint256 => DomainScoreData) private _domainScoreData;
+    address public aiOracleAddress;
+
     modifier onlyOperator() {
         require(
             ECDSAStakeRegistry(stakeRegistry).operatorRegistered(msg.sender),
@@ -108,5 +113,76 @@ contract DomalendServiceManager is ECDSAServiceManagerBase, IDomalendServiceMana
         address user
     ) external view returns (CScoreData memory) {
         return _userCScoreData[user];
+    }
+
+    // === Domain Scoring Functions ===
+
+    function setAIOracle(address _aiOracleAddress) external {
+        require(_aiOracleAddress != address(0), "Invalid address");
+        aiOracleAddress = _aiOracleAddress;
+    }
+
+    function createDomainScoringTask(
+        uint256 domainTokenId
+    ) external returns (DomainTask memory) {
+        require(domainTokenId > 0, "Invalid domain token ID");
+
+        DomainTask memory newTask = DomainTask({
+            domainTokenId: domainTokenId,
+            taskCreatedBlock: uint32(block.number),
+            taskType: TaskType.DomainScore
+        });
+
+        // Store hash of domain task onchain
+        domainTaskHashes[latestTaskNum] = keccak256(abi.encode(newTask));
+        emit DomainScoringTaskCreated(latestTaskNum, newTask);
+        latestTaskNum = latestTaskNum + 1;
+
+        return newTask;
+    }
+
+    function respondToDomainTask(
+        DomainTask calldata task,
+        uint256 score,
+        string calldata ipfsHash,
+        uint32 referenceTaskIndex,
+        bytes calldata signature
+    ) external onlyOperator {
+        // Verify task hash
+        require(
+            keccak256(abi.encode(task)) == domainTaskHashes[referenceTaskIndex],
+            "Task does not match recorded hash"
+        );
+        require(
+            allTaskResponses[msg.sender][referenceTaskIndex].length == 0,
+            "Operator already responded"
+        );
+        require(score <= 100, "Score must be 0-100");
+
+        // Store response
+        allTaskResponses[msg.sender][referenceTaskIndex] = signature;
+
+        // Store domain score data
+        _domainScoreData[task.domainTokenId] = DomainScoreData({
+            score: score,
+            lastUpdate: block.timestamp,
+            ipfsHash: ipfsHash
+        });
+
+        emit DomainScoreSubmitted(task.domainTokenId, score, ipfsHash, msg.sender);
+
+        // Call AIOracle to submit score (if address is set)
+        if (aiOracleAddress != address(0)) {
+            (bool success,) = aiOracleAddress.call(
+                abi.encodeWithSignature("submitScore(uint256,uint256)", task.domainTokenId, score)
+            );
+            require(success, "AIOracle submission failed");
+        }
+    }
+
+    function getDomainScoreData(
+        uint256 domainTokenId
+    ) external view returns (DomainScoreData memory) {
+        return _domainScoreData[domainTokenId];
     }
 }

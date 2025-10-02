@@ -25,6 +25,7 @@
 		"encoding": "^0.1.13",
 		"ethers": "^6.13.2",
 		"express": "^4.21.1",
+		"openai": "^6.0.1",
 		"pinata": "^2.2.0"
 	},
 	"devDependencies": {
