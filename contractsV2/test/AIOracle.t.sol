@@ -17,32 +17,16 @@ contract AIOracleTest is Test {
     uint256 constant COCA_COLA_SCORE = 96;
     uint256 constant RANDOM_SCORE = 15;
 
-    event ScoringRequested(
-        uint256 indexed domainTokenId,
-        address indexed requester,
-        uint256 timestamp
-    );
+    event ScoringRequested(uint256 indexed domainTokenId, address indexed requester, uint256 timestamp);
 
-    event ScoreSubmitted(
-        uint256 indexed domainTokenId,
-        uint256 score,
-        address indexed submittedBy,
-        uint256 timestamp
-    );
+    event ScoreSubmitted(uint256 indexed domainTokenId, uint256 score, address indexed submittedBy, uint256 timestamp);
 
     event BatchScoresSubmitted(
-        uint256[] domainTokenIds,
-        uint256[] scores,
-        address indexed submittedBy,
-        uint256 batchSize,
-        uint256 timestamp
+        uint256[] domainTokenIds, uint256[] scores, address indexed submittedBy, uint256 batchSize, uint256 timestamp
     );
 
     event BackendServiceUpdated(
-        address indexed oldService,
-        address indexed newService,
-        address indexed updatedBy,
-        uint256 timestamp
+        address indexed oldService, address indexed newService, address indexed updatedBy, uint256 timestamp
     );
 
     function setUp() public {

@@ -16,7 +16,7 @@ import "./interfaces/ILoanManager.sol";
 contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
-    string public constant VERSION = "3.0.0";
+    string public constant VERSION = "4.0.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;

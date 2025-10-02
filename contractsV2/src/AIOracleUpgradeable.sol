@@ -13,8 +13,8 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
     using SafeERC20 for IERC20;
 
     bytes32 public constant SCORING_SERVICE_ROLE = keccak256("SCORING_SERVICE_ROLE");
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-    string public constant VERSION = "3.0.0";
+    bytes32 public constant SERVICE_MANAGER_ROLE = keccak256("SERVICE_MANAGER_ROLE");
+    string public constant VERSION = "4.0.0";
 
     address public backendService;
     bool public emergencyPaused;
@@ -112,7 +112,7 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         uint256 indexed requestId,
         uint256 indexed domainTokenId,
         uint256 score,
-        address indexed operator,
+        address indexed serviceManager,
         address rewardRecipient,
         uint256 rewardAmount,
         uint256 timestamp
@@ -128,12 +128,12 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         uint256 newFee
     );
 
-    event OperatorRegistered(
-        address indexed operator
+    event ServiceManagerRegistered(
+        address indexed serviceManager
     );
 
-    event OperatorUnregistered(
-        address indexed operator
+    event ServiceManagerUnregistered(
+        address indexed serviceManager
     );
 
     modifier onlyBackendService() {
@@ -443,7 +443,7 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         address rewardRecipient
     )
         external
-        onlyRole(OPERATOR_ROLE)
+        onlyRole(SERVICE_MANAGER_ROLE)
         validScore(score)
         whenNotPaused
     {
@@ -465,7 +465,7 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         req.isCompleted = true;
         req.rewardRecipient = rewardRecipient;
 
-        // Pay operator
+        // Pay service manager
         IERC20(req.paymentToken).safeTransfer(rewardRecipient, req.paymentAmount);
 
         // Update stats
@@ -510,28 +510,28 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
     }
 
     /**
-     * @notice Register an AVS operator
+     * @notice Register a service manager
      */
-    function registerOperator(address operator)
+    function registerServiceManager(address serviceManager)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        require(operator != address(0), "Invalid operator");
-        _grantRole(OPERATOR_ROLE, operator);
+        require(serviceManager != address(0), "Invalid service manager");
+        _grantRole(SERVICE_MANAGER_ROLE, serviceManager);
 
-        emit OperatorRegistered(operator);
+        emit ServiceManagerRegistered(serviceManager);
     }
 
     /**
-     * @notice Unregister an AVS operator
+     * @notice Unregister a service manager
      */
-    function unregisterOperator(address operator)
+    function unregisterServiceManager(address serviceManager)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        _revokeRole(OPERATOR_ROLE, operator);
+        _revokeRole(SERVICE_MANAGER_ROLE, serviceManager);
 
-        emit OperatorUnregistered(operator);
+        emit ServiceManagerUnregistered(serviceManager);
     }
 
     /**
@@ -597,14 +597,14 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
     }
 
     /**
-     * @notice Check if address is registered operator
+     * @notice Check if address is registered service manager
      */
-    function isOperator(address account)
+    function isServiceManager(address account)
         external
         view
         returns (bool)
     {
-        return hasRole(OPERATOR_ROLE, account);
+        return hasRole(SERVICE_MANAGER_ROLE, account);
     }
 
     /**

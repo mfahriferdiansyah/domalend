@@ -86,7 +86,7 @@ contract MockAIOracle is IAIOracle {
         return new uint256[](0);
     }
 
-    function isOperator(address /* account */) external pure returns (bool) {
+    function isServiceManager(address /* account */) external pure returns (bool) {
         return false; // Mock implementation
     }
 

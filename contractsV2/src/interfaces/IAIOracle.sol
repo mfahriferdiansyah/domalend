@@ -40,5 +40,5 @@ interface IAIOracle {
     function getPaidRequestDetail(uint256 requestId) external view returns (PaidScoreRequest memory);
     function getPaidRequests(uint256 startId, uint256 limit) external view returns (PaidScoreRequest[] memory);
     function getPendingRequests(uint256 maxResults) external view returns (uint256[] memory);
-    function isOperator(address account) external view returns (bool);
+    function isServiceManager(address account) external view returns (bool);
 }
