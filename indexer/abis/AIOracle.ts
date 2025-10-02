@@ -71,6 +71,62 @@ export const AIOracle_ABI = [
       { name: 'timestamp', type: 'uint256', indexed: false },
     ],
   },
+  // Paid Scoring Events
+  {
+    type: 'event',
+    name: 'PaidScoringRequested',
+    inputs: [
+      { name: 'requestId', type: 'uint256', indexed: true },
+      { name: 'domainTokenId', type: 'uint256', indexed: true },
+      { name: 'requester', type: 'address', indexed: true },
+      { name: 'paymentToken', type: 'address', indexed: false },
+      { name: 'paymentAmount', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PaidScoreSubmitted',
+    inputs: [
+      { name: 'requestId', type: 'uint256', indexed: true },
+      { name: 'domainTokenId', type: 'uint256', indexed: true },
+      { name: 'score', type: 'uint256', indexed: false },
+      { name: 'serviceManager', type: 'address', indexed: true },
+      { name: 'rewardRecipient', type: 'address', indexed: false },
+      { name: 'rewardAmount', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PaymentTokenUpdated',
+    inputs: [
+      { name: 'oldToken', type: 'address', indexed: true },
+      { name: 'newToken', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PaidScoringFeeUpdated',
+    inputs: [
+      { name: 'oldFee', type: 'uint256', indexed: false },
+      { name: 'newFee', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'ServiceManagerRegistered',
+    inputs: [
+      { name: 'serviceManager', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'ServiceManagerUnregistered',
+    inputs: [
+      { name: 'serviceManager', type: 'address', indexed: true },
+    ],
+  },
   // Functions
   {
     type: 'function',

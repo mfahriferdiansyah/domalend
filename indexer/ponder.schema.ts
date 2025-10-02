@@ -345,6 +345,73 @@ export const batchOperation = onchainTable(
   })
 );
 
+// Paid Score Requests - tracks paid scoring requests
+export const paidScoreRequest = onchainTable(
+  "paid_score_request",
+  (t) => ({
+    id: t.text().primaryKey(), // requestId
+    requestId: t.text().notNull(),
+    domainTokenId: t.text().notNull(),
+    requesterAddress: t.hex().notNull(),
+    paymentToken: t.hex().notNull(),
+    paymentAmount: t.text().notNull(),
+    status: t.text().notNull().default("pending"), // 'pending', 'completed'
+    rewardRecipient: t.hex(),
+    requestTimestamp: t.timestamp().notNull(),
+    completionTimestamp: t.timestamp(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    requestIdIndex: index().on(table.requestId),
+    domainTokenIdIndex: index().on(table.domainTokenId),
+    requesterIndex: index().on(table.requesterAddress),
+    statusIndex: index().on(table.status),
+  })
+);
+
+// Paid Score Submissions - tracks when service managers submit paid scores
+export const paidScoreSubmission = onchainTable(
+  "paid_score_submission",
+  (t) => ({
+    id: t.text().primaryKey(), // tx-logIndex
+    requestId: t.text().notNull(),
+    domainTokenId: t.text().notNull(),
+    score: t.integer().notNull(),
+    serviceManagerAddress: t.hex().notNull(),
+    rewardRecipient: t.hex().notNull(),
+    rewardAmount: t.text().notNull(),
+    submissionTimestamp: t.timestamp().notNull(),
+    blockNumber: t.bigint().notNull(),
+    transactionHash: t.hex().notNull(),
+  }),
+  (table) => ({
+    requestIdIndex: index().on(table.requestId),
+    domainTokenIdIndex: index().on(table.domainTokenId),
+    serviceManagerIndex: index().on(table.serviceManagerAddress),
+    submissionTimestampIndex: index().on(table.submissionTimestamp),
+  })
+);
+
+// Service Managers - tracks registered service managers and their stats
+export const serviceManager = onchainTable(
+  "service_manager",
+  (t) => ({
+    id: t.hex().primaryKey(), // manager address
+    managerAddress: t.hex().notNull(),
+    isActive: t.boolean().notNull().default(true),
+    totalScoresSubmitted: t.integer().notNull().default(0),
+    totalRewardsEarned: t.text().notNull().default("0"),
+    registeredAt: t.timestamp().notNull(),
+    lastActivityAt: t.timestamp(),
+    unregisteredAt: t.timestamp(),
+  }),
+  (table) => ({
+    isActiveIndex: index().on(table.isActive),
+    managerAddressIndex: index().on(table.managerAddress),
+  })
+);
+
 // Relations
 export const poolRelations = relations(pool, ({ many }) => ({
   history: many(poolHistory),
