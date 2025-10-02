@@ -42,12 +42,8 @@ contract UpgradeScript is Script {
         console.log("Deployer:", deployer);
         console.log("");
 
-        // Check current versions
-        console.log("Current Versions:");
-        console.log("  AIOracle:     ", AIOracleUpgradeable(aiOracleProxy).getVersion());
-        console.log("  SatoruLending:", SatoruLendingUpgradeable(satoruProxy).getVersion());
-        console.log("  LoanManager:  ", LoanManagerUpgradeable(loanManagerProxy).getVersion());
-        console.log("  DutchAuction: ", DutchAuctionUpgradeable(dutchAuctionProxy).getVersion());
+        // Skip version check - old implementations don't have getVersion()
+        console.log("Upgrading to v4.0.0...");
         console.log("");
 
         vm.startBroadcast(deployerPrivateKey);

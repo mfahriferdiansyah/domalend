@@ -5,10 +5,16 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
+    using SafeERC20 for IERC20;
+
     bytes32 public constant SCORING_SERVICE_ROLE = keccak256("SCORING_SERVICE_ROLE");
-    string public constant VERSION = "3.0.0";
+    bytes32 public constant SERVICE_MANAGER_ROLE = keccak256("SERVICE_MANAGER_ROLE");
+    string public constant VERSION = "4.0.0";
 
     address public backendService;
     bool public emergencyPaused;
@@ -27,6 +33,23 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
     uint256 public totalScoresSubmitted;
     uint256 public totalScoringRequests;
     mapping(address => uint256) public userRequests;
+
+    // Paid Scoring State Variables
+    IERC20 public paymentToken;
+    uint256 public paidScoringFee;
+
+    struct PaidScoreRequest {
+        address requester;
+        uint256 domainTokenId;
+        address paymentToken;
+        uint256 paymentAmount;
+        uint256 timestamp;
+        bool isCompleted;
+        address rewardRecipient;
+    }
+
+    mapping(uint256 => PaidScoreRequest) public paidScoreRequests;
+    uint256 public nextPaidRequestId;
 
     event ScoringRequested(
         uint256 indexed domainTokenId,
@@ -75,6 +98,44 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         uint256 timestamp
     );
 
+    // Paid Scoring Events
+    event PaidScoringRequested(
+        uint256 indexed requestId,
+        uint256 indexed domainTokenId,
+        address indexed requester,
+        address paymentToken,
+        uint256 paymentAmount,
+        uint256 timestamp
+    );
+
+    event PaidScoreSubmitted(
+        uint256 indexed requestId,
+        uint256 indexed domainTokenId,
+        uint256 score,
+        address indexed serviceManager,
+        address rewardRecipient,
+        uint256 rewardAmount,
+        uint256 timestamp
+    );
+
+    event PaymentTokenUpdated(
+        address indexed oldToken,
+        address indexed newToken
+    );
+
+    event PaidScoringFeeUpdated(
+        uint256 oldFee,
+        uint256 newFee
+    );
+
+    event ServiceManagerRegistered(
+        address indexed serviceManager
+    );
+
+    event ServiceManagerUnregistered(
+        address indexed serviceManager
+    );
+
     modifier onlyBackendService() {
         require(hasRole(SCORING_SERVICE_ROLE, msg.sender), "Not authorized backend service");
         _;
@@ -99,6 +160,7 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         __Ownable_init(initialOwner);
         __AccessControl_init();
         __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
         emergencyPaused = false;
@@ -317,8 +379,236 @@ contract AIOracleUpgradeable is Initializable, OwnableUpgradeable, AccessControl
         return VERSION;
     }
 
+    // ============ Paid Scoring Functions ============
+
+    /**
+     * @notice Initialize paid scoring (call after upgrade)
+     */
+    function initializePaidScoring(address _paymentToken, uint256 _initialFee)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(address(paymentToken) == address(0), "Already initialized");
+        require(_paymentToken != address(0), "Invalid token");
+
+        paymentToken = IERC20(_paymentToken);
+        paidScoringFee = _initialFee;
+        nextPaidRequestId = 1;
+    }
+
+    /**
+     * @notice Create a paid scoring request
+     */
+    function paidScoreRequest(uint256 domainTokenId)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256 requestId)
+    {
+        require(address(paymentToken) != address(0), "Not configured");
+        require(paidScoringFee > 0, "Fee not set");
+
+        // Transfer payment from user to contract
+        paymentToken.safeTransferFrom(msg.sender, address(this), paidScoringFee);
+
+        // Create request
+        requestId = nextPaidRequestId++;
+        paidScoreRequests[requestId] = PaidScoreRequest({
+            requester: msg.sender,
+            domainTokenId: domainTokenId,
+            paymentToken: address(paymentToken),
+            paymentAmount: paidScoringFee,
+            timestamp: block.timestamp,
+            isCompleted: false,
+            rewardRecipient: address(0)
+        });
+
+        emit PaidScoringRequested(
+            requestId,
+            domainTokenId,
+            msg.sender,
+            address(paymentToken),
+            paidScoringFee,
+            block.timestamp
+        );
+    }
+
+    /**
+     * @notice Submit score for paid request and receive payment
+     */
+    function submitPaidScore(
+        uint256 requestId,
+        uint256 domainTokenId,
+        uint256 score,
+        address rewardRecipient
+    )
+        external
+        onlyRole(SERVICE_MANAGER_ROLE)
+        validScore(score)
+        whenNotPaused
+    {
+        PaidScoreRequest storage req = paidScoreRequests[requestId];
+
+        require(req.requester != address(0), "Request not found");
+        require(!req.isCompleted, "Already completed");
+        require(req.domainTokenId == domainTokenId, "Domain mismatch");
+        require(rewardRecipient != address(0), "Invalid recipient");
+
+        // Store score (same as free scoring)
+        domainScores[domainTokenId] = DomainScore({
+            score: score,
+            timestamp: block.timestamp,
+            isValid: true
+        });
+
+        // Mark completed
+        req.isCompleted = true;
+        req.rewardRecipient = rewardRecipient;
+
+        // Pay service manager
+        IERC20(req.paymentToken).safeTransfer(rewardRecipient, req.paymentAmount);
+
+        // Update stats
+        totalScoresSubmitted++;
+
+        emit PaidScoreSubmitted(
+            requestId,
+            domainTokenId,
+            score,
+            msg.sender,
+            rewardRecipient,
+            req.paymentAmount,
+            block.timestamp
+        );
+    }
+
+    /**
+     * @notice Set payment token address
+     */
+    function setPaymentToken(address _token)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(_token != address(0), "Invalid token");
+        address oldToken = address(paymentToken);
+        paymentToken = IERC20(_token);
+
+        emit PaymentTokenUpdated(oldToken, _token);
+    }
+
+    /**
+     * @notice Set paid scoring fee amount
+     */
+    function setPaidScoringFee(uint256 _fee)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        uint256 oldFee = paidScoringFee;
+        paidScoringFee = _fee;
+
+        emit PaidScoringFeeUpdated(oldFee, _fee);
+    }
+
+    /**
+     * @notice Register a service manager
+     */
+    function registerServiceManager(address serviceManager)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(serviceManager != address(0), "Invalid service manager");
+        _grantRole(SERVICE_MANAGER_ROLE, serviceManager);
+
+        emit ServiceManagerRegistered(serviceManager);
+    }
+
+    /**
+     * @notice Unregister a service manager
+     */
+    function unregisterServiceManager(address serviceManager)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        _revokeRole(SERVICE_MANAGER_ROLE, serviceManager);
+
+        emit ServiceManagerUnregistered(serviceManager);
+    }
+
+    /**
+     * @notice Get paid request details
+     */
+    function getPaidRequestDetail(uint256 requestId)
+        external
+        view
+        returns (PaidScoreRequest memory)
+    {
+        return paidScoreRequests[requestId];
+    }
+
+    /**
+     * @notice Get multiple paid requests (pagination)
+     */
+    function getPaidRequests(uint256 startId, uint256 limit)
+        external
+        view
+        returns (PaidScoreRequest[] memory)
+    {
+        uint256 endId = startId + limit;
+        if (endId > nextPaidRequestId) {
+            endId = nextPaidRequestId;
+        }
+
+        uint256 count = endId > startId ? endId - startId : 0;
+        PaidScoreRequest[] memory requests = new PaidScoreRequest[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            requests[i] = paidScoreRequests[startId + i];
+        }
+
+        return requests;
+    }
+
+    /**
+     * @notice Get pending (incomplete) paid requests
+     */
+    function getPendingRequests(uint256 maxResults)
+        external
+        view
+        returns (uint256[] memory)
+    {
+        // First pass: count pending
+        uint256 count = 0;
+        for (uint256 i = 1; i < nextPaidRequestId && count < maxResults; i++) {
+            if (!paidScoreRequests[i].isCompleted && paidScoreRequests[i].requester != address(0)) {
+                count++;
+            }
+        }
+
+        // Second pass: collect IDs
+        uint256[] memory pending = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 1; i < nextPaidRequestId && index < count; i++) {
+            if (!paidScoreRequests[i].isCompleted && paidScoreRequests[i].requester != address(0)) {
+                pending[index++] = i;
+            }
+        }
+
+        return pending;
+    }
+
+    /**
+     * @notice Check if address is registered service manager
+     */
+    function isServiceManager(address account)
+        external
+        view
+        returns (bool)
+    {
+        return hasRole(SERVICE_MANAGER_ROLE, account);
+    }
+
     /**
      * @dev Storage gap for future upgrades
      */
-    uint256[50] private __gap;
+    uint256[44] private __gap;
 }
