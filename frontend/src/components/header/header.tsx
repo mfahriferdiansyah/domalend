@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Menu, Moon, Search, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Menu } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { Button } from "../ui/button";
@@ -12,7 +11,6 @@ interface DomaLendHeaderProps {
 }
 
 export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
-  const { theme, setTheme } = useTheme();
   const router = useRouter();
   const pathname = router.pathname;
 
@@ -24,16 +22,16 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
   ];
 
   return (
-    <header className="relative z-10 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-      <nav className="container mx-auto px-4 py-4 flex flex-row md:grid md:grid-cols-3 md:items-center">
+    <header className="relative z-10 border-b border-gray-200 bg-white shadow-sm">
+      <nav className="max-w-7xl mx-auto px-6 py-4 flex flex-row md:grid md:grid-cols-3 md:items-center">
         {/* Left Column - Logo */}
         <div className="flex flex-row gap-4 items-center">
           <Link href="/domalend" className="flex flex-row items-center gap-3">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">D</span>
+            <div className="h-14 w-14 bg-white rounded-lg flex items-center justify-center">
+              <img src="/icons/domalend-blue.png" alt="DomaLend Logo" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
-              <span className="text-xl font-bold text-gray-900 dark:text-white">
+              <span className="text-xl font-bold text-gray-900">
                 DomaLend
               </span>
               <span className="text-xs text-gray-500 -mt-1">
@@ -51,10 +49,10 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
               href={link.destination}
               className={cn(
                 "px-4 py-2 rounded-md text-sm font-medium transition-all duration-200",
-                "hover:bg-gray-100 dark:hover:bg-gray-800",
-                "text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white",
-                pathname === link.destination && 
-                "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                "hover:bg-gray-100",
+                "text-gray-700 hover:text-gray-900",
+                pathname === link.destination &&
+                "bg-blue-50 text-blue-700 hover:bg-blue-100"
               )}
             >
               {link.label}
@@ -64,23 +62,6 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
 
         {/* Right Column - Controls */}
         <div className="flex justify-end items-center gap-3">
-          {/* Search Button */}
-          <Button variant="ghost" size="sm" className="hidden md:flex" aria-label="Search">
-            <Search className="h-4 w-4" />
-            <span className="sr-only">Search</span>
-          </Button>
-
-          {/* Theme Toggle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="hidden md:flex"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            <span className="sr-only">{theme === "dark" ? "Light" : "Dark"} mode</span>
-          </Button>
 
           {/* Connect Wallet Button */}
           <ButtonConnectWallet />
@@ -97,11 +78,11 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
                 <div className="flex flex-col h-full">
                   {/* Mobile Logo */}
                   <div className="flex items-center gap-3 mb-8 pt-4">
-                    <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">D</span>
+                    <div className="h-8 w-8 bg-white rounded-lg flex items-center justify-center p-1">
+                      <img src="/icons/domalend.png" alt="DomaLend Logo" className="w-full h-full object-contain" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">DomaLend</h2>
+                      <h2 className="text-lg font-bold text-gray-900">DomaLend</h2>
                       <p className="text-xs text-gray-500">AI-Powered Domain Lending</p>
                     </div>
                   </div>
@@ -114,8 +95,8 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
                           variant="ghost"
                           className={cn(
                             "w-full justify-start font-medium",
-                            pathname === link.destination && 
-                            "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400"
+                            pathname === link.destination &&
+                            "bg-blue-50 text-blue-700"
                           )}
                         >
                           {link.label}
@@ -124,19 +105,6 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
                     ))}
                   </div>
 
-                  {/* Mobile Footer */}
-                  <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Theme</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                      >
-                        {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               </SheetContent>
             </Sheet>
