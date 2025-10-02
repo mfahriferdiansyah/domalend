@@ -52,6 +52,44 @@ contract MockAIOracle is IAIOracle {
         return block.timestamp - _scores[domainTokenId].timestamp;
     }
 
+    // Paid Scoring Functions (Mock implementations)
+    function paidScoreRequest(uint256 /* domainTokenId */) external returns (uint256 requestId) {
+        return 1; // Mock implementation
+    }
+
+    function submitPaidScore(
+        uint256 /* requestId */,
+        uint256 /* domainTokenId */,
+        uint256 /* score */,
+        address /* rewardRecipient */
+    ) external {
+        // Mock implementation - do nothing
+    }
+
+    function getPaidRequestDetail(uint256 /* requestId */) external pure returns (PaidScoreRequest memory) {
+        return PaidScoreRequest({
+            requester: address(0),
+            domainTokenId: 0,
+            paymentToken: address(0),
+            paymentAmount: 0,
+            timestamp: 0,
+            isCompleted: false,
+            rewardRecipient: address(0)
+        });
+    }
+
+    function getPaidRequests(uint256 /* startId */, uint256 /* limit */) external pure returns (PaidScoreRequest[] memory) {
+        return new PaidScoreRequest[](0);
+    }
+
+    function getPendingRequests(uint256 /* maxResults */) external pure returns (uint256[] memory) {
+        return new uint256[](0);
+    }
+
+    function isOperator(address /* account */) external pure returns (bool) {
+        return false; // Mock implementation
+    }
+
     // Mock-specific functions
     function setScore(uint256 domainTokenId, uint256 score) external {
         _scores[domainTokenId] = DomainScore({
