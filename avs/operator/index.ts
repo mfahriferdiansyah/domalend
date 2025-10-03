@@ -253,34 +253,43 @@ const registerOperator = async () => {
 
 	const salt = ethers.hexlify(ethers.randomBytes(32));
 	const expiry = Math.floor(Date.now() / 1000) + 3600;
-	let operatorSignatureWithSaltAndExpiry = {
+	const operatorSignature = {
 		signature: "",
 		salt: salt,
 		expiry: expiry,
 	};
 
+	const serviceManagerAddr = await domalendServiceManager.getAddress();
+	console.log("ServiceManager address for digest:", serviceManagerAddr);
 	const operatorDigestHash =
 		await avsDirectory.calculateOperatorAVSRegistrationDigestHash(
 			wallet.address,
-			await domalendServiceManager.getAddress(),
+			serviceManagerAddr,
 			salt,
 			expiry
 		);
 	console.log(operatorDigestHash);
 
-	// Sign the digest hash with the operator's private key
+	// Sign the digest hash directly (raw signature without EIP-191 prefix)
 	console.log("Signing digest hash with operator's private key");
 	const operatorSigningKey = new ethers.SigningKey(process.env.PRIVATE_KEY!);
 	const operatorSignedDigestHash = operatorSigningKey.sign(operatorDigestHash);
+	operatorSignature.signature = operatorSignedDigestHash.serialized;
 
-	// Encode the signature in the required format
-	operatorSignatureWithSaltAndExpiry.signature = ethers.Signature.from(
-		operatorSignedDigestHash
-	).serialized;
+	// Check if already registered
+	try {
+		const isRegistered = await ecdsaRegistryContract.operatorRegistered(wallet.address);
+		if (isRegistered) {
+			console.log("Operator already registered on AVS");
+			return;
+		}
+	} catch (err) {
+		console.log("Could not check registration status, proceeding with registration...");
+	}
 
 	console.log("Registering Operator to AVS Registry contract");
 	const tx2 = await ecdsaRegistryContract.registerOperatorWithSignature(
-		operatorSignatureWithSaltAndExpiry,
+		[operatorSignature.signature, operatorSignature.salt, operatorSignature.expiry],
 		wallet.address
 	);
 	await tx2.wait();
@@ -404,13 +413,13 @@ export const monitorServiceManagerEvents = async () => {
 					const taskRaw = parsedLog.args[1];
 					const domainTokenId = taskRaw[0].toString(); // domainTokenId is first field in DomainTask
 
-					// Create mutable copy of task tuple for contract call
-					const task = {
-						domainTokenId: taskRaw[0],
-						requestId: taskRaw[1],
-						taskCreatedBlock: taskRaw[2],
-						taskType: taskRaw[3]
-					};
+					// Create mutable copy of task tuple for contract call (as array)
+					const task = [
+						taskRaw[0],  // domainTokenId
+						taskRaw[1],  // requestId
+						taskRaw[2],  // taskCreatedBlock
+						taskRaw[3]   // taskType
+					];
 
 					if (processedTasks.has(taskIndex.toString())) continue;
 
@@ -473,7 +482,7 @@ export const monitorServiceManagerEvents = async () => {
 };
 
 const main = async () => {
-	// await registerOperator();
+	// await registerOperator(); // Commented out - not required since onlyOperator modifier is disabled
 
 	// Monitor ServiceManager for domain scoring tasks
 	monitorServiceManagerEvents().catch((error) => {
