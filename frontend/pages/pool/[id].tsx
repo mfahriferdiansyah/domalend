@@ -2,30 +2,26 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { SiteIcon } from '@/components/ui/site-icon';
-import { usePoolById } from '@/hooks/usePoolData';
-import { useDomaLend, useInstantLoanEligibility, useUSDCAllowance, useUSDCBalance, TransactionProgress, useDomainScore } from '@/hooks/web3/domalend/useDomaLend';
-import { useUserPoolShares } from '@/hooks/web3/domalend/useUserPoolShares';
-import { useUserDomains, usePool as usePoolRaw, useUserScoredDomains } from '@/hooks/useDomaLendApi';
-import { LiquidityProgress } from '@/components/ui/liquidity-progress';
-import { TransactionStep, transactionSteps } from '@/components/ui/transaction-progress';
-import { formatUSDC, formatBasisPoints } from '@/utils/formatting';
-import { useState } from 'react';
-import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LiquidityProgress } from '@/components/ui/liquidity-progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAccount } from 'wagmi';
+import { SiteIcon } from '@/components/ui/site-icon';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TransactionStep, transactionSteps } from '@/components/ui/transaction-progress';
+import { usePool as usePoolRaw, useUserDomains, useUserScoredDomains } from '@/hooks/useDomaLendApi';
+import { useUserDomainsWithScoring } from '@/hooks/useUserDomainsWithScoring';
+import { usePoolById } from '@/hooks/usePoolData';
+import { TransactionProgress, useDomainScore, useDomaLend, useInstantLoanEligibility, useUSDCAllowance, useUSDCBalance } from '@/hooks/web3/domalend/useDomaLend';
+import { useUserPoolShares } from '@/hooks/web3/domalend/useUserPoolShares';
+import { formatBasisPoints, formatUSDC } from '@/utils/formatting';
 import {
   AlertCircle,
   ArrowLeft,
-  BarChart3,
-  History,
-  Wallet,
   DollarSign,
   Droplets,
+  History,
   TrendingUp,
   Users,
   X
@@ -33,6 +29,9 @@ import {
 import { NextPage } from 'next';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { useAccount } from 'wagmi';
 
 // Helper function to format APY with smart detection
 const formatAPY = (apy: string | number | undefined, interestRate?: string | number): string => {
@@ -71,6 +70,7 @@ const PoolDetailPage: NextPage = () => {
   const { address } = useAccount();
   const { data: userDomainsData } = useUserDomains(address);
   const { data: userScoredDomainsData } = useUserScoredDomains(address);
+  const { eligibleDomains, domainScoringStatus, loading: domainsLoading, error: domainsError, refresh: refreshDomains } = useUserDomainsWithScoring(address);
 
   // USDC related hooks
   const { allowance: usdcAllowance } = useUSDCAllowance(address, contracts.SATORU_LENDING);
@@ -173,25 +173,23 @@ const PoolDetailPage: NextPage = () => {
   const userOwnedDomains = userDomainsData?.ownedNFTs || [];
   const userScoredDomains = userScoredDomainsData?.scoredDomains || [];
 
-  // For instant loans, only show domains with valid analytics scores
-  // Filter domains that have analytics data AND a valid score
-  const userDomains = userOwnedDomains.filter((domain: any) => {
-    const hasAnalyticsScore = domain.analytics?.latestAiScore > 0;
-    return hasAnalyticsScore;
-  });
+  // Use the new filtered domains that are eligible for loans
+  // This includes proper scoring verification and collateral usage checks
+  const userDomains = eligibleDomains;
 
-  // Debug logging
+  // Debug logging with enhanced domain analysis
   console.log('Pool Detail Debug:', {
     address,
     userOwnedDomains: userOwnedDomains.length,
     userScoredDomains: userScoredDomains.length,
-    filteredDomainsWithAnalytics: userDomains.length,
+    eligibleDomainsForLoan: userDomains.length,
     selectedDomainId,
-    domainAnalyticsBreakdown: userOwnedDomains.map((d: any) => ({
+    domainScoringStatus,
+    eligibleDomainsList: userDomains.map((d: any) => ({
       name: d.name,
       tokenId: d.tokenId,
-      hasAnalytics: !!d.analytics,
-      analyticsScore: d.analytics?.latestAiScore
+      latestScore: d.analytics?.latestAiScore,
+      hasCompletedScoring: !!d.scoringHistory?.some((e: any) => e.status === 'completed')
     }))
   });
 
@@ -212,10 +210,10 @@ const PoolDetailPage: NextPage = () => {
       domainId: selectedDomainId,
       contractScore,
       contractTimestamp,
-      indexerScore: selectedDomain?.aiScore?.score,
-      indexerData: selectedDomain?.aiScore,
       hasAnalytics: !!selectedDomain?.analytics,
-      analyticsScore: selectedDomain?.analytics?.latestAiScore
+      analyticsScore: selectedDomain?.analytics?.latestAiScore,
+      hasScoringHistory: !!selectedDomain?.scoringHistory?.length,
+      scoringEvents: selectedDomain?.scoringHistory
     });
   }
 
@@ -228,6 +226,35 @@ const PoolDetailPage: NextPage = () => {
     reason,
     isCheckingEligibility
   });
+
+  // Helper function for score color badges
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return 'bg-green-100 text-green-800';
+    if (score >= 75) return 'bg-blue-100 text-blue-800';
+    if (score >= 60) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+  };
+
+  // Helper function to truncate token ID
+  const truncateTokenId = (tokenId: string, startChars = 8, endChars = 6) => {
+    if (!tokenId) return 'N/A';
+    if (tokenId.length <= startChars + endChars) return tokenId;
+    return `${tokenId.slice(0, startChars)}...${tokenId.slice(-endChars)}`;
+  };
+
+  // Helper function to get domain status for non-eligible domains
+  const getDomainStatusInfo = (domain: any) => {
+    const status = domainScoringStatus.find(s => s.tokenId === domain.tokenId);
+    if (!status) return { text: 'Unknown', color: 'gray' };
+    
+    if (!status.hasAnalytics) return { text: 'Not scored', color: 'gray' };
+    if (!status.hasScoringEvents) return { text: 'Scoring incomplete', color: 'orange' };
+    if (!status.hasCompletedScoring) return { text: 'Scoring in progress', color: 'blue' };
+    if (status.isUsedAsCollateral) return { text: 'Used as collateral', color: 'red' };
+    if (status.isLiquidated) return { text: 'Liquidated', color: 'red' };
+    if (status.latestScore <= 0) return { text: 'Invalid score', color: 'red' };
+    return { text: 'Eligible', color: 'green' };
+  };
 
   const handleAddLiquidity = async () => {
     if (!liquidityAmount || !poolId || !address) {
@@ -717,14 +744,77 @@ const PoolDetailPage: NextPage = () => {
                           </Alert>
                         )}
 
-                        {address && userDomains.length === 0 && (
+                        {address && domainsLoading && (
+                          <Alert className="border-blue-200 bg-blue-50">
+                            <AlertCircle className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-blue-800">
+                              <div className="flex items-center gap-2">
+                                <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                                Loading your domains and checking eligibility...
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {address && domainsError && (
+                          <Alert className="border-red-200 bg-red-50">
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                            <AlertDescription className="text-red-800">
+                              <div className="flex items-center justify-between">
+                                <span>Failed to load domains: {domainsError}</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={refreshDomains}
+                                  className="text-xs px-2 py-1 h-6 ml-2"
+                                >
+                                  Retry
+                                </Button>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {address && userDomains.length === 0 && !domainsLoading && (
                           <Alert className="border-amber-200 bg-amber-50">
                             <AlertCircle className="h-4 w-4 text-amber-600" />
                             <AlertDescription className="text-amber-800">
-                              You need scored domains to request instant loans. Only domains with AI scores are eligible for instant loans. 
-                              <Link href="/domains/add" className="underline hover:text-amber-900 ml-1">
-                                Score your domains here
-                              </Link>
+                              {userOwnedDomains.length === 0 ? (
+                                <>
+                                  You don't own any domains yet. 
+                                  <Link href="/domains" className="underline hover:text-amber-900 ml-1">
+                                    View available domains
+                                  </Link>
+                                </>
+                              ) : (
+                                <>
+                                  No domains are eligible for instant loans. Domains must be properly scored and not currently used as collateral.
+                                  <br />
+                                  <Link href="/domains/add" className="underline hover:text-amber-900 ml-1">
+                                    Score your domains here
+                                  </Link>
+                                  {domainScoringStatus.length > 0 && (
+                                    <details className="mt-2">
+                                      <summary className="cursor-pointer text-sm">View domain status details</summary>
+                                      <div className="mt-2 space-y-1 text-xs">
+                                        {domainScoringStatus.map((status: any) => (
+                                          <div key={status.tokenId} className="flex justify-between">
+                                            <span>{status.name}:</span>
+                                            <span>
+                                              {!status.hasAnalytics ? 'Not scored' :
+                                               !status.hasScoringEvents ? 'Scoring incomplete' :
+                                               !status.hasCompletedScoring ? 'Scoring in progress' :
+                                               status.isUsedAsCollateral ? 'Used as collateral' :
+                                               status.isLiquidated ? 'Liquidated' :
+                                               status.latestScore <= 0 ? 'Invalid score' : 'Eligible'}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  )}
+                                </>
+                              )}
                             </AlertDescription>
                           </Alert>
                         )}
@@ -732,24 +822,80 @@ const PoolDetailPage: NextPage = () => {
                         {address && userDomains.length > 0 && (
                           <>
                             <div>
-                              <Label htmlFor="domain">Select Domain Collateral</Label>
+                              <div className="flex items-center justify-between mb-2">
+                                <Label htmlFor="domain">Select Domain Collateral</Label>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={refreshDomains}
+                                  disabled={domainsLoading}
+                                  className="text-xs px-2 py-1 h-6"
+                                >
+                                  {domainsLoading ? (
+                                    <div className="animate-spin h-3 w-3 border border-gray-400 border-t-transparent rounded-full"></div>
+                                  ) : (
+                                    "Refresh"
+                                  )}
+                                </Button>
+                              </div>
                               <Select value={selectedDomainId} onValueChange={setSelectedDomainId}>
-                                <SelectTrigger>
+                                <SelectTrigger className="h-auto min-h-[2.5rem]">
                                   <SelectValue placeholder="Choose a domain" />
                                 </SelectTrigger>
-                                <SelectContent>
-                                  {userDomains.map((domain: any) => (
-                                    <SelectItem key={domain.tokenId} value={domain.tokenId}>
-                                      <div className="flex items-center justify-between w-full">
-                                        <span>{domain.name} (ID: {domain.tokenId})</span>
-                                        {domain.analytics?.latestAiScore && (
-                                          <span className="text-xs text-blue-600 font-medium ml-2">
-                                            Score: {domain.analytics.latestAiScore}/100
-                                          </span>
-                                        )}
+                                <SelectContent className="min-w-[500px] max-h-[300px]">
+                                  {/* Show all owned domains with status indicators */}
+                                  {userOwnedDomains.map((domain: any) => {
+                                    const isEligible = userDomains.some(eligible => eligible.tokenId === domain.tokenId);
+                                    const statusInfo = getDomainStatusInfo(domain);
+                                    return (
+                                    <SelectItem 
+                                      key={domain.tokenId} 
+                                      value={domain.tokenId}
+                                      disabled={!isEligible}
+                                      className={`py-3 px-3 ${isEligible ? 'cursor-pointer hover:bg-gray-50 focus:bg-gray-50' : 'cursor-not-allowed opacity-60 bg-gray-50'}`}
+                                    >
+                                      <div className="flex items-center justify-between w-full min-w-0">
+                                        <div className="flex-1 min-w-0 mr-3">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <SiteIcon 
+                                              domain={domain.name} 
+                                              size={16} 
+                                              className="flex-shrink-0"
+                                            />
+                                            <span 
+                                              className="font-medium truncate" 
+                                              title={domain.name}
+                                            >
+                                              {domain.name}
+                                            </span>
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            ID: {truncateTokenId(domain.tokenId)}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                          {/* Status Badge */}
+                                          <Badge className={`text-xs px-2 py-1 ${
+                                            statusInfo.color === 'green' ? 'bg-green-100 text-green-800' :
+                                            statusInfo.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                                            statusInfo.color === 'orange' ? 'bg-orange-100 text-orange-800' :
+                                            statusInfo.color === 'red' ? 'bg-red-100 text-red-800' :
+                                            'bg-gray-100 text-gray-800'
+                                          }`}>
+                                            {statusInfo.text}
+                                          </Badge>
+                                          
+                                          {/* Score Badge */}
+                                          {domain.analytics?.latestAiScore && (
+                                            <Badge className={`${getScoreColor(domain.analytics.latestAiScore)} text-xs px-2 py-1`}>
+                                              {domain.analytics.latestAiScore}/100
+                                            </Badge>
+                                          )}
+                                        </div>
                                       </div>
                                     </SelectItem>
-                                  ))}
+                                    );
+                                  })}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -880,7 +1026,7 @@ const PoolDetailPage: NextPage = () => {
                         
                         {!hasLiquidity && address && (
                           <div className="p-3 bg-gray-50 rounded-lg">
-                            <div className="text-sm text-gray-600">You don't have any liquidity in this pool.</div>
+                            <div className="text-sm text-gray-600">You don&apos;t have any liquidity in this pool.</div>
                           </div>
                         )}
                         
@@ -1215,7 +1361,7 @@ const PoolDetailPage: NextPage = () => {
               
               {!hasLiquidity && address && (
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-600">You don't have any liquidity in this pool.</div>
+                  <div className="text-sm text-gray-600">You don&apos;t have any liquidity in this pool.</div>
                 </div>
               )}
               

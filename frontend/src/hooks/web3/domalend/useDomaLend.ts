@@ -503,7 +503,7 @@ export function useDomaLend() {
         parseUnits(requestedAmount, 6), // Using USDC decimals
         BigInt(term),
         poolId ? BigInt(poolId) : BigInt(0)
-      ];
+      ] as const;
 
       // Simulate the transaction first
       const simulationConfig = {
@@ -690,7 +690,7 @@ export function useDomaLend() {
       }
 
       const totalSteps = requiresApproval ? 5 : 3;
-      const args = [BigInt(loanId), amountBigInt];
+      const args = [BigInt(loanId), amountBigInt] as const;
 
       console.log('🏗️ [repayLoan] Prepared contract parameters', {
         loanId: args[0].toString(),
@@ -1257,7 +1257,7 @@ export function useDomaLend() {
       }
 
       const totalSteps = requiresApproval ? 5 : 3;
-      const args = [BigInt(poolId), amountBigInt];
+      const args = [BigInt(poolId), amountBigInt] as const;
 
       console.log('🏗️ [addLiquidity] Prepared contract parameters', {
         poolId: args[0].toString(),
@@ -1380,7 +1380,7 @@ export function useDomaLend() {
     setError(null);
     
     try {
-      const args = [BigInt(auctionId)];
+      const args = [BigInt(auctionId)] as const;
       const value = parseEther(bidAmount);
 
       // Simulate the transaction first
@@ -1420,7 +1420,7 @@ export function useDomaLend() {
     setError(null);
     
     try {
-      const args = [BigInt(loanId)];
+      const args = [BigInt(loanId)] as const;
 
       // Simulate the transaction first
       const simulationConfig = {
@@ -1458,7 +1458,7 @@ export function useDomaLend() {
     setError(null);
     
     try {
-      const args = [BigInt(domainTokenId)];
+      const args = [BigInt(domainTokenId)] as const;
 
       // Simulate the transaction first
       const simulationConfig = {
@@ -1515,7 +1515,7 @@ export function useDomaLend() {
         sharePercentageNote: 'Percentage of user\'s share to withdraw'
       });
 
-      const args = [BigInt(poolId), BigInt(sharePercentage)];
+      const args = [BigInt(poolId), BigInt(sharePercentage)] as const;
 
       console.log('🏗️ [removeLiquidity] Prepared contract parameters', {
         poolId: args[0].toString(),
@@ -1663,7 +1663,7 @@ export function useDomaLend() {
         proposedInterestRate: BigInt(proposedInterestRate),
         campaignDuration: BigInt(campaignDuration),
         repaymentDeadline: BigInt(repaymentDeadline)
-      }];
+      }] as const;
 
       console.log('🏗️ [createLoanRequest] Prepared contract parameters', {
         contractParams: {
@@ -1930,7 +1930,7 @@ export function useDomaLend() {
       }
 
       const totalSteps = requiresApproval ? 5 : 3;
-      const args = [BigInt(requestId), amountBigInt];
+      const args = [BigInt(requestId), amountBigInt] as const;
 
       console.log('🏗️ [fundLoanRequest] Prepared contract parameters', {
         requestId: args[0].toString(),
@@ -2052,7 +2052,7 @@ export function useDomaLend() {
     setError(null);
     
     try {
-      const args = [BigInt(requestId)];
+      const args = [BigInt(requestId)] as const;
 
       // Simulate the transaction first
       const simulationConfig = {

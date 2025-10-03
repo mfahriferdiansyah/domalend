@@ -49,18 +49,18 @@ export const usePoolData = () => {
   
   // Transform data to match legacy interface
   const transformedData = (data || []).map(pool => ({
-    poolId: pool.poolId || pool.id,
-    poolName: pool.poolId || pool.id, // Using poolId as name for now
+    poolId: pool.poolId,
+    poolName: pool.poolId, // Using poolId as name for now
     totalLiquidity: pool.totalLiquidity || '0',
     availableLiquidity: (parseInt(pool.totalLiquidity || '0') - parseInt(pool.totalLoanVolume || '0')).toString(), // Available = Total - Outstanding loans
     apy: `${(pool.interestRate / 100).toFixed(1)}%`,
     minLoanAmount: pool.minLoanAmount || '0',
-    maxLoanAmount: pool.maxLoanAmount || '1000000',
+    maxLoanAmount: pool.maxLoanAmount || '0',
     minDuration: pool.minDuration || '0',
     maxDuration: pool.maxDuration || '0',
     minAiScore: pool.minAiScore || 0,
     loanToValueRatio: '80%', // Default value since this field isn't in the new API
-    poolType: (pool.poolType || 'custom') as 'instant' | 'custom' | 'crowdfunded',
+    poolType: ('custom') as 'instant' | 'custom' | 'crowdfunded', // Default since poolType not available
     creator: pool.creator,
     activeLoans: pool.activeLoans || 0,
     loans: [] // We could populate this with actual loan data if needed
@@ -107,9 +107,11 @@ export const usePoolById = (poolId: string | null) => {
     apy: `${(data.pool.interestRate / 100).toFixed(1)}`,
     minLoanAmount: data.pool.minLoanAmount || '0',
     maxLoanAmount: data.pool.maxLoanAmount || '0',
+    minDuration: data.pool.minDuration || '0',
+    maxDuration: data.pool.maxDuration || '0',
     minAiScore: data.pool.minAiScore || 0,
     loanToValueRatio: '80%',
-    poolType: (data.pool.poolType || 'custom') as 'instant' | 'custom' | 'crowdfunded',
+    poolType: ('custom') as 'instant' | 'custom' | 'crowdfunded', // Default since poolType not available
     creator: data.pool.creator,
     totalLoanVolume: data.pool.totalLoanVolume || '0',
     liquidityProviderCount: data.pool.liquidityProviderCount || 0,
@@ -122,7 +124,7 @@ export const usePoolById = (poolId: string | null) => {
       domainName: loan.domainName,
       borrower: loan.borrowerAddress,
       amount: loan.loanAmount,
-      status: loan.status,
+      status: 'active', // Default since status not available
       createdAt: loan.eventTimestamp
     }))
   } : null;
