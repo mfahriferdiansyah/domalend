@@ -19,6 +19,7 @@ import "../src/DutchAuctionUpgradeable.sol";
  * - SATORU_PROXY: SatoruLending proxy address
  * - LOANMANAGER_PROXY: LoanManager proxy address
  * - DUTCHAUCTION_PROXY: DutchAuction proxy address
+ * - SERVICE_MANAGER_ADDRESS (optional): AVS ServiceManager address to set in AIOracle
  *
  * Usage:
  * PRIVATE_KEY=0x... forge script script/Upgrade.s.sol:UpgradeScript \
@@ -80,6 +81,25 @@ contract UpgradeScript is Script {
 
         UUPSUpgradeable(dutchAuctionProxy).upgradeToAndCall(address(newAuction), "");
         console.log("  DutchAuction upgraded!");
+        console.log("");
+
+        // Set ServiceManager address in AIOracle if provided
+        address serviceManagerAddress = address(0);
+        try vm.envAddress("SERVICE_MANAGER_ADDRESS") returns (address sm) {
+            serviceManagerAddress = sm;
+        } catch {
+            // Not set, skip
+        }
+
+        if (serviceManagerAddress != address(0)) {
+            console.log("Configuring ServiceManager in AIOracle (atomic)...");
+            console.log("  This will:");
+            console.log("  1. Grant SERVICE_MANAGER_ROLE (allows submitPaidScore)");
+            console.log("  2. Set serviceManagerAddress (enables task creation)");
+            AIOracleUpgradeable(aiOracleProxy).configureServiceManager(serviceManagerAddress);
+            console.log("  ServiceManager configured:", serviceManagerAddress);
+            console.log("");
+        }
 
         vm.stopBroadcast();
 

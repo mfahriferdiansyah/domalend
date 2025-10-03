@@ -1,0 +1,17 @@
+{
+	"lastUpdate": { "timestamp": "1743968190", "block_number": "33582629" },
+	"addresses": {
+		"proxyAdmin": "0x05e8e5b32a22ace9696d432125bf96a4c64f699b",
+		"delegation": "0xf1ba6d27ad4c85ba708d435bbfd7da8215185381",
+		"delegationManagerImpl": "0x8b539efe7e6e78e329538d01e081b7e6e86e79f9",
+		"avsDirectory": "0xe03df06aa76f90450c3c3d0dcd5e9429b20ecf18",
+		"avsDirectoryImpl": "0x783adbc294a6e46b1956c31d44f9f7899de858de",
+		"strategyManager": "0x5957a61bf13f06b3e298965585d25712a7ce144b",
+		"strategyManagerImpl": "0x0f87d253eb5f8113d8702d42276011f1d6d04eed",
+		"eigenPodManager": "0x52af8589149f146f66a25b563e21899d490d3862",
+		"eigenPodManagerImpl": "0xae64d0bd5802070e67e7a40785265d2900b6ba10",
+		"strategyFactory": "0x9d6982c38d297958a7f8d0a6c5178dae2e0b958d",
+		"strategyFactoryImpl": "0x89c9f465a8a8aa692025b201f6544d8423a01dfc",
+		"strategyBeacon": "0xb5208a993b99ddafa33eb7c3c9855af4a715c135"
+	}
+}

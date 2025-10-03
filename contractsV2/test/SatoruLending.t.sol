@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/legacy/SatoruLending.sol";
-import "../src/legacy/AIOracle.sol";
+import "../src/SatoruLendingUpgradeable.sol";
+import "../src/AIOracleUpgradeable.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockUSDC is IERC20 {
     mapping(address => uint256) private _balances;
@@ -185,8 +186,8 @@ contract SatoruLendingTest is Test {
         uint256 totalRefunded,
         string reason
     );
-    SatoruLending public lending;
-    AIOracle public aiOracle;
+    SatoruLendingUpgradeable public lending;
+    AIOracleUpgradeable public aiOracle;
     MockUSDC public usdc;
     MockDoma public doma;
     MockLoanManager public loanManager;
@@ -212,13 +213,26 @@ contract SatoruLendingTest is Test {
         doma = new MockDoma();
         loanManager = new MockLoanManager();
 
-        // Deploy AIOracle
-        vm.prank(owner);
-        aiOracle = new AIOracle(owner);
+        // Deploy AIOracle with proxy
+        AIOracleUpgradeable aiOracleImpl = new AIOracleUpgradeable();
+        bytes memory aiOracleInitData = abi.encodeWithSelector(
+            AIOracleUpgradeable.initialize.selector,
+            owner
+        );
+        ERC1967Proxy aiOracleProxy = new ERC1967Proxy(address(aiOracleImpl), aiOracleInitData);
+        aiOracle = AIOracleUpgradeable(address(aiOracleProxy));
 
-        // Deploy SatoruLending
-        vm.prank(owner);
-        lending = new SatoruLending(owner, address(usdc), address(doma), address(aiOracle));
+        // Deploy SatoruLending with proxy
+        SatoruLendingUpgradeable lendingImpl = new SatoruLendingUpgradeable();
+        bytes memory lendingInitData = abi.encodeWithSelector(
+            SatoruLendingUpgradeable.initialize.selector,
+            owner,
+            address(usdc),
+            address(doma),
+            address(aiOracle)
+        );
+        ERC1967Proxy lendingProxy = new ERC1967Proxy(address(lendingImpl), lendingInitData);
+        lending = SatoruLendingUpgradeable(address(lendingProxy));
 
         // Set up mock data
         doma.setDomain(DOMAIN_TOKEN_ID_1, user1, block.timestamp + 365 days, "nike.com");
@@ -252,7 +266,7 @@ contract SatoruLendingTest is Test {
     }
 
     function testCreateLiquidityPool() public {
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6, // 10k USDC
             minAiScore: 80,
             maxDomainExpiration: 400, // days
@@ -300,7 +314,7 @@ contract SatoruLendingTest is Test {
 
     function testCreatePoolInvalidParameters() public {
         // Test logical inconsistencies that should still be rejected
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 1000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -319,7 +333,7 @@ contract SatoruLendingTest is Test {
 
     function testAddLiquidity() public {
         // Create pool first
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -345,7 +359,7 @@ contract SatoruLendingTest is Test {
 
     function testCanGetInstantLoan() public {
         // Create pool
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -374,7 +388,7 @@ contract SatoruLendingTest is Test {
 
     function testCanGetInstantLoanLowScore() public {
         // Create pool with high minimum score
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 99, // Higher than nike.com score (98)
             maxDomainExpiration: 400,
@@ -403,7 +417,7 @@ contract SatoruLendingTest is Test {
 
     function testRequestInstantLoan() public {
         // Create pool
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -419,7 +433,7 @@ contract SatoruLendingTest is Test {
         uint256 poolId = lending.createLiquidityPool(params);
 
         // Request instant loan
-        SatoruLending.InstantLoanParams memory loanParams = SatoruLending.InstantLoanParams({
+        SatoruLendingUpgradeable.InstantLoanParams memory loanParams = SatoruLendingUpgradeable.InstantLoanParams({
             domainTokenId: DOMAIN_TOKEN_ID_1,
             poolId: poolId,
             requestedAmount: 3000e6,
@@ -442,7 +456,7 @@ contract SatoruLendingTest is Test {
     }
 
     function testCreateLoanRequest() public {
-        SatoruLending.CreateRequestParams memory params = SatoruLending.CreateRequestParams({
+        SatoruLendingUpgradeable.CreateRequestParams memory params = SatoruLendingUpgradeable.CreateRequestParams({
             domainTokenId: DOMAIN_TOKEN_ID_1,
             requestedAmount: 5000e6,
             proposedInterestRate: 1000, // 10%
@@ -469,7 +483,7 @@ contract SatoruLendingTest is Test {
 
     function testFundLoanRequest() public {
         // Create loan request
-        SatoruLending.CreateRequestParams memory params = SatoruLending.CreateRequestParams({
+        SatoruLendingUpgradeable.CreateRequestParams memory params = SatoruLendingUpgradeable.CreateRequestParams({
             domainTokenId: DOMAIN_TOKEN_ID_1,
             requestedAmount: 5000e6,
             proposedInterestRate: 1000,
@@ -492,7 +506,7 @@ contract SatoruLendingTest is Test {
 
     function testFundLoanRequestPartial() public {
         // Create loan request
-        SatoruLending.CreateRequestParams memory params = SatoruLending.CreateRequestParams({
+        SatoruLendingUpgradeable.CreateRequestParams memory params = SatoruLendingUpgradeable.CreateRequestParams({
             domainTokenId: DOMAIN_TOKEN_ID_1,
             requestedAmount: 5000e6,
             proposedInterestRate: 1000,
@@ -520,7 +534,7 @@ contract SatoruLendingTest is Test {
 
     function testCancelLoanRequest() public {
         // Create loan request
-        SatoruLending.CreateRequestParams memory params = SatoruLending.CreateRequestParams({
+        SatoruLendingUpgradeable.CreateRequestParams memory params = SatoruLendingUpgradeable.CreateRequestParams({
             domainTokenId: DOMAIN_TOKEN_ID_1,
             requestedAmount: 5000e6,
             proposedInterestRate: 1000,
@@ -556,7 +570,7 @@ contract SatoruLendingTest is Test {
 
     function testProtocolStats() public {
         // Create pool and execute loan
-        SatoruLending.CreatePoolParams memory poolParams = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory poolParams = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -571,7 +585,7 @@ contract SatoruLendingTest is Test {
         vm.prank(user1);
         uint256 poolId = lending.createLiquidityPool(poolParams);
 
-        SatoruLending.InstantLoanParams memory loanParams = SatoruLending.InstantLoanParams({
+        SatoruLendingUpgradeable.InstantLoanParams memory loanParams = SatoruLendingUpgradeable.InstantLoanParams({
             domainTokenId: DOMAIN_TOKEN_ID_1,
             poolId: poolId,
             requestedAmount: 3000e6,
@@ -596,7 +610,7 @@ contract SatoruLendingTest is Test {
 
     function testInvalidDomainOwnership() public {
         // Create pool
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -625,7 +639,7 @@ contract SatoruLendingTest is Test {
 
     function testRemoveLiquidity() public {
         // Create pool
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,
@@ -659,7 +673,7 @@ contract SatoruLendingTest is Test {
 
     function testHighInterestRateAcceptance() public {
         // Test that high interest rates are now accepted (unrestricted design)
-        SatoruLending.CreatePoolParams memory params = SatoruLending.CreatePoolParams({
+        SatoruLendingUpgradeable.CreatePoolParams memory params = SatoruLendingUpgradeable.CreatePoolParams({
             initialLiquidity: 10000e6,
             minAiScore: 80,
             maxDomainExpiration: 400,

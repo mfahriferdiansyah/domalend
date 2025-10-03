@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/legacy/LoanManager.sol";
+import "../src/LoanManagerUpgradeable.sol";
 import "../src/interfaces/ILoanManager.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockUSDC is IERC20 {
     mapping(address => uint256) private _balances;
@@ -267,7 +268,7 @@ contract LoanManagerTest is Test {
         uint256 startingPrice
     );
 
-    LoanManager public loanManager;
+    LoanManagerUpgradeable public loanManager;
     MockUSDC public usdc;
     MockDoma public doma;
     MockSatoruLending public satoruLending;
@@ -298,9 +299,17 @@ contract LoanManagerTest is Test {
         satoruLending = new MockSatoruLending();
         dutchAuction = new MockDutchAuction();
 
-        // Deploy LoanManager
-        vm.prank(owner);
-        loanManager = new LoanManager(owner, address(usdc), address(doma), address(satoruLending));
+        // Deploy LoanManager with proxy
+        LoanManagerUpgradeable implementation = new LoanManagerUpgradeable();
+        bytes memory initData = abi.encodeWithSelector(
+            LoanManagerUpgradeable.initialize.selector,
+            owner,
+            address(usdc),
+            address(doma),
+            address(satoruLending)
+        );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
+        loanManager = LoanManagerUpgradeable(address(proxy));
 
         // Set Dutch auction
         vm.prank(owner);
