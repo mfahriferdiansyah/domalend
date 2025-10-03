@@ -106,10 +106,10 @@ const AuctionsPage: NextPage = () => {
 
   const filteredAuctions = processedAuctions.filter(auction => {
     // Filter by search term
-    const matchesSearch = searchTerm.length < 2 ||
-      auction.domain.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      auction.auctionId.includes(searchTerm) ||
-      auction.loanId.includes(searchTerm);
+    const matchesSearch = !searchTerm.trim() ||
+      auction.domain.name.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
+      auction.auctionId.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
+      auction.loanId.toLowerCase().includes(searchTerm.toLowerCase().trim());
 
     if (!matchesSearch) return false;
 
@@ -137,22 +137,27 @@ const AuctionsPage: NextPage = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <GridLoadingState items={6} columns={2} />
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <GridLoadingState items={6} columns={2} />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <ApiErrorState error={error} onRetry={refresh} />
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <ApiErrorState error={error} onRetry={refresh} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Auctions</h1>
         <p className="text-gray-600">Bid on liquidated domains with decreasing prices</p>
@@ -168,7 +173,7 @@ const AuctionsPage: NextPage = () => {
             placeholder="Search auctions..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-12 rounded-xl"
           />
         </div>
 
@@ -221,7 +226,7 @@ const AuctionsPage: NextPage = () => {
       <div className="mb-4 flex justify-between items-center">
         <p className="text-sm text-gray-600">
           {filteredAuctions.length} auctions found
-          {searchTerm.length >= 2 && ` matching "${searchTerm}"`}
+          {searchTerm.trim() && ` matching "${searchTerm}"`}
           {activeTab !== 'all' && ` • Showing ${activeTab.replace('-', ' ')}`}
         </p>
 
@@ -446,6 +451,7 @@ const AuctionsPage: NextPage = () => {
           className="mt-8"
         />
       )}
+      </div>
     </div>
   );
 };

@@ -144,7 +144,7 @@ export function SwapProgressDialog({
               <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                 <span>Transaction:</span>
                 <a
-                  href={`https://sepolia.arbiscan.io/tx/${txHash}`}
+                  href={`${process.env.NEXT_PUBLIC_EXPLORER_URL}/tx/${txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center hover:text-primary"

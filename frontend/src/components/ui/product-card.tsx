@@ -34,39 +34,85 @@ const hoverBackgroundVariants = {
   purple: 'hover:bg-purple-100',
 };
 
+const groupHoverBackgroundVariants = {
+  green: 'group-hover:bg-green-100',
+  orange: 'group-hover:bg-orange-100',
+  blue: 'group-hover:bg-blue-100',
+  purple: 'group-hover:bg-purple-100',
+};
+
 export function ProductCard({ badge, title, description, illustration }: ProductCardProps) {
   return (
-    <Card className="relative overflow-hidden hover:shadow-lg transition-shadow duration-300 border-none bg-gray-50 shadow-sm">
-      <CardContent className="p-3">
-        {/* Visual Element with White Card Wrapper */}
-        <div className="relative mb-3">
-          <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-300 ${hoverBackgroundVariants[badge.variant]} group cursor-pointer`}>
-            <div className="flex justify-end items-start mb-2">
-              <Badge className={`${badgeVariants[badge.variant]} text-sm font-medium px-3 py-1 flex items-center gap-2`}>
-                <div className={`w-2 h-2 rounded-full ${dotVariants[badge.variant]}`}></div>
-                {badge.text}
-              </Badge>
+    <div className="group cursor-pointer">
+      {/* Gradient border wrapper that appears on hover */}
+      <div className="rounded-xl p-0.5 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:block hidden transition-all duration-300">
+        <Card className="relative overflow-hidden hover:shadow-lg transition-shadow duration-300 border-none bg-gray-50 shadow-sm rounded-xl">
+          <CardContent className="p-3">
+            {/* Visual Element with White Card Wrapper */}
+            <div className="relative mb-3">
+              <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-300 ${groupHoverBackgroundVariants[badge.variant]} cursor-pointer`}>
+                <div className="flex justify-end items-start mb-2">
+                  <Badge className={`${badgeVariants[badge.variant]} text-sm font-medium px-3 py-1 flex items-center gap-2 group-hover:bg-white`}>
+                    <div className={`w-2 h-2 rounded-full ${dotVariants[badge.variant]}`}></div>
+                    {badge.text}
+                  </Badge>
+                </div>
+
+                <div className="flex justify-center items-center flex-1">
+                  <div className="transition-transform duration-300 group-hover:scale-110">
+                    {illustration}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-center items-center flex-1">
-              <div className="transition-transform duration-300 group-hover:scale-110">
-                {illustration}
+            <div className="flex justify-between items-start px-3">
+              <div className="flex-1">
+                <h3 className="text-xl font-semibold text-gray-900 mb-1">
+                  {title}
+                </h3>
+                <p className="text-gray-600 text-base leading-relaxed pr-4">
+                  {description}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* Default card without gradient border */}
+      <Card className="relative overflow-hidden hover:shadow-lg transition-shadow duration-300 border-none bg-gray-50 shadow-sm group-hover:hidden">
+        <CardContent className="p-3">
+          {/* Visual Element with White Card Wrapper */}
+          <div className="relative mb-3">
+            <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-300 ${groupHoverBackgroundVariants[badge.variant]} cursor-pointer`}>
+              <div className="flex justify-end items-start mb-2">
+                <Badge className={`${badgeVariants[badge.variant]} text-sm font-medium px-3 py-1 flex items-center gap-2 group-hover:bg-white`}>
+                  <div className={`w-2 h-2 rounded-full ${dotVariants[badge.variant]}`}></div>
+                  {badge.text}
+                </Badge>
+              </div>
+
+              <div className="flex justify-center items-center flex-1">
+                <div className="transition-transform duration-300 group-hover:scale-110">
+                  {illustration}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex justify-between items-start px-3">
-          <div className="flex-1">
-            <h3 className="text-xl font-semibold text-gray-900 mb-1">
-              {title}
-            </h3>
-            <p className="text-gray-600 text-base leading-relaxed pr-4">
-              {description}
-            </p>
+          <div className="flex justify-between items-start px-3">
+            <div className="flex-1">
+              <h3 className="text-xl font-semibold text-gray-900 mb-1">
+                {title}
+              </h3>
+              <p className="text-gray-600 text-base leading-relaxed pr-4">
+                {description}
+              </p>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

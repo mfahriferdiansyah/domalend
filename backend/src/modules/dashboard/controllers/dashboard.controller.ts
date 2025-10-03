@@ -107,7 +107,6 @@ export class DashboardController {
   private async buildDashboardStats(dashboardData: any, userAddress: string): Promise<DashboardStatsDto> {
     const userLoans = dashboardData.userLoans?.items || [];
     const userPoolEvents = dashboardData.userPoolHistory?.items || [];
-    const userAuctions = dashboardData.userAuctions?.items || [];
 
     // Calculate active loans - now simply filter by status
     const activeLoans = userLoans.filter(loan => loan.status === 'active');

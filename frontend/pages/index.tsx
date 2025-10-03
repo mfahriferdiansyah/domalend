@@ -338,7 +338,7 @@ const DomaLendPage: NextPage = () => {
             <h1 className="text-4xl lg:text-6xl font-bold text-gray-900 mt-6 mb-6">
               The <span className="text-gray-600">verifiable AI agent</span> powering{' '}
               <br />
-              Domain&apos;s <span className="font-black">lending revolution.</span>
+              Domain&apos;s <span className="font-black">lending.</span>
             </h1>
             <p className="text-lg text-gray-600 mb-8 max-w-3xl mx-auto">
               DomaLend deploys verifiable AI agents for
@@ -377,16 +377,24 @@ const DomaLendPage: NextPage = () => {
           {/* Tech Stack Logos */}
           <div className="flex flex-wrap justify-center items-center gap-12 mb-16">
             <div className="flex items-center justify-center">
-              <img src="/icons/stack-doma.svg" alt="Doma Protocol" className="h-8 w-auto filter grayscale brightness-50 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              <a href="https://doma.xyz/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+                <img src="/icons/stack-doma.svg" alt="Doma Protocol" className="h-8 w-auto filter grayscale brightness-50 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              </a>
             </div>
             <div className="flex items-center justify-center">
-              <img src="/icons/stack-eigenlayer.svg" alt="EigenLayer" className="h-28 w-auto filter grayscale opacity-60 hover:opacity-100 hover:filter-none transition-all duration-300" />
+              <a href="https://www.eigencloud.xyz/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+                <img src="/icons/stack-eigenlayer.svg" alt="EigenLayer" className="h-28 w-auto filter grayscale opacity-60 hover:opacity-100 hover:filter-none transition-all duration-300" />
+              </a>
             </div>
             <div className="flex items-center justify-center">
-              <img src="/icons/stack-ponder.svg" alt="Ponder" className="h-8 w-auto filter grayscale brightness-0 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              <a href="https://ponder.sh/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+                <img src="/icons/stack-ponder.svg" alt="Ponder" className="h-8 w-auto filter grayscale brightness-0 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              </a>
             </div>
             <div className="flex items-center justify-center">
-              <img src="/icons/stack-recclaim-protocol.svg" alt="Reclaim Protocol" className="h-12 w-auto filter grayscale brightness-50 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              <a href="https://reclaimprotocol.org/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+                <img src="/icons/stack-recclaim-protocol.svg" alt="Reclaim Protocol" className="h-12 w-auto filter grayscale brightness-50 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              </a>
             </div>
           </div>
         </div>
@@ -492,7 +500,7 @@ const DomaLendPage: NextPage = () => {
             <input
               type="email"
               placeholder="you@domalend.com"
-              className="flex-1 px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 h-9 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6">
               Subscribe

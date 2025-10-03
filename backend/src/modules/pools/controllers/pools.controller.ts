@@ -25,7 +25,9 @@ import {
   GetUserPoolsResponseDto,
   GetPoolDetailResponseDto,
   LoanDto,
-  PoolHistoryEventDto
+  PoolHistoryEventDto,
+  PoolHistoryDto,
+  GetPoolsSummaryResponseDto
 } from '../dto/pool.dto';
 
 @ApiTags('pools')
@@ -36,6 +38,57 @@ export class PoolsController {
   constructor(
     private readonly indexerService: IndexerService,
   ) {}
+
+  @Get('summary')
+  @ApiOperation({
+    summary: 'Get a summary of all pools',
+    description: 'Retrieve TVL, average APY, and total active loan amount for all pools.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pools summary retrieved successfully',
+    type: GetPoolsSummaryResponseDto
+  })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getPoolsSummary(): Promise<GetPoolsSummaryResponseDto> {
+    this.logger.log('Getting pools summary');
+
+    try {
+      // Fetch pools with only necessary fields for TVL and APY
+      const poolData = await this.indexerService.queryPools({
+        limit: 1000,
+      });
+
+      const pools = poolData.pools?.items || [];
+
+      const tvlBigInt = pools.reduce((sum, pool) => sum + BigInt(pool.totalLiquidity || '0'), 0n);
+      
+      const totalInterestRate = pools.reduce((sum, pool) => sum + (pool.interestRate || 0), 0);
+      const averageApy = pools.length > 0 ? Math.round(totalInterestRate / pools.length) : 0;
+
+      // Fetch all active loans to sum their amounts
+      const activeLoansData = await this.indexerService.queryLoans({
+        where: { status: 'active' },
+        limit: 1000
+      });
+      const activeLoans = activeLoansData.loans?.items || [];
+      const totalActiveLoanAmountBigInt = activeLoans.reduce((sum, loan) => sum + BigInt(loan.originalAmount || '0'), 0n);
+
+      const availableLiquidityBigInt = tvlBigInt - totalActiveLoanAmountBigInt;
+
+      return {
+        summary: {
+          tvl: tvlBigInt.toString(),
+          averageApy,
+          totalActiveLoanAmount: totalActiveLoanAmountBigInt.toString(),
+          availableLiquidity: availableLiquidityBigInt.toString(),
+        }
+      };
+    } catch (error) {
+      this.logger.error('Failed to get pools summary:', error);
+      throw new HttpException('Failed to fetch pools summary', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 
   @Get()
   @ApiOperation({
@@ -63,10 +116,11 @@ export class PoolsController {
       const pools = await this.buildPoolObjects(poolData.pools?.items || []);
 
       return {
-        pools,
-        total: pools.length,
-        page,
-        limit
+        data: {
+          pools: {
+            items: pools
+          }
+        }
       };
     } catch (error) {
       this.logger.error('Failed to get pools:', error);
@@ -210,24 +264,48 @@ export class PoolsController {
   }
 
   private async buildPoolObjects(poolRecords: any[]): Promise<PoolDto[]> {
-    const pools: PoolDto[] = poolRecords.map(record => {
+    const pools: PoolDto[] = await Promise.all(poolRecords.map(async record => {
       // Format timestamp to ISO string for better readability
       const createdAt = new Date(parseInt(record.createdAt)).toISOString();
       
+      // Get pool history for this pool
+      let history: PoolHistoryDto | undefined;
+      try {
+        const poolHistoryData = await this.indexerService.queryPoolHistory({
+          where: { poolId: record.poolId },
+          limit: 100
+        });
+        history = {
+          items: this.buildPoolHistoryObjects(poolHistoryData.poolHistorys?.items || [])
+        };
+      } catch (error) {
+        this.logger.warn(`Failed to get history for pool ${record.poolId}:`, error);
+      }
+      
       return {
         poolId: record.poolId,
+        id: record.poolId,
         creator: record.creatorAddress,
+        transactionHash: record.transactionHash || '',
         minAiScore: record.minAiScore,
         interestRate: record.interestRate,
         createdAt: createdAt,
+        lastUpdated: record.lastUpdated || record.createdAt,
         totalLiquidity: record.totalLiquidity || '0',
         liquidityProviderCount: record.participantCount || 0,
+        participantCount: record.participantCount || 0,
         activeLoans: 0, // Will be enhanced
         totalLoanVolume: '0', // Will be enhanced
         defaultRate: 0, // Will be enhanced
-        status: record.status as 'active' | 'inactive'
+        status: record.status as 'active' | 'inactive',
+        minDuration: record.minDuration || '86400',
+        maxDuration: record.maxDuration || '2592000',
+        minLoanAmount: record.minLoanAmount || '1000000000',
+        maxLoanAmount: record.maxLoanAmount || '5000000000',
+        maxDomainExpiration: record.maxDomainExpiration || '999999999',
+        history
       };
-    });
+    }));
 
     // Get additional stats for these pools
     if (pools.length > 0) {
@@ -240,18 +318,42 @@ export class PoolsController {
   private async buildPoolObjectFromRecord(record: any): Promise<PoolDto> {
     const createdAt = new Date(parseInt(record.createdAt)).toISOString();
     
+    // Get pool history for this pool
+    let history: PoolHistoryDto | undefined;
+    try {
+      const poolHistoryData = await this.indexerService.queryPoolHistory({
+        where: { poolId: record.poolId },
+        limit: 100
+      });
+      history = {
+        items: this.buildPoolHistoryObjects(poolHistoryData.poolHistorys?.items || [])
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to get history for pool ${record.poolId}:`, error);
+    }
+    
     const pool: PoolDto = {
       poolId: record.poolId,
+      id: record.poolId,
       creator: record.creatorAddress,
+      transactionHash: record.transactionHash || '',
       minAiScore: record.minAiScore,
       interestRate: record.interestRate,
       createdAt: createdAt,
+      lastUpdated: record.lastUpdated || record.createdAt,
       totalLiquidity: record.totalLiquidity || '0',
       liquidityProviderCount: record.participantCount || 0,
+      participantCount: record.participantCount || 0,
       activeLoans: 0, // Will be enhanced
       totalLoanVolume: '0', // Will be enhanced
       defaultRate: 0, // Will be enhanced
-      status: record.status as 'active' | 'inactive'
+      status: record.status as 'active' | 'inactive',
+      minDuration: record.minDuration || '86400',
+      maxDuration: record.maxDuration || '2592000',
+      minLoanAmount: record.minLoanAmount || '1000000000',
+      maxLoanAmount: record.maxLoanAmount || '5000000000',
+      maxDomainExpiration: record.maxDomainExpiration || '999999999',
+      history
     };
 
     // Get additional stats for this pool
