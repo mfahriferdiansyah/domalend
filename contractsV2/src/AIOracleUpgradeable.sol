@@ -21,7 +21,7 @@ contract AIOracleUpgradeable is
 
     bytes32 public constant SCORING_SERVICE_ROLE = keccak256("SCORING_SERVICE_ROLE");
     bytes32 public constant SERVICE_MANAGER_ROLE = keccak256("SERVICE_MANAGER_ROLE");
-    string public constant VERSION = "4.3.2";
+    string public constant VERSION = "5.0.0";
 
     address public backendService;
     address public serviceManagerAddress; // AVS ServiceManager address
@@ -369,9 +369,7 @@ contract AIOracleUpgradeable is
         // Update stats
         totalScoresSubmitted++;
 
-        emit PaidScoreSubmitted(
-            requestId, domainTokenId, score, msg.sender, rewardRecipient, req.paymentAmount, block.timestamp
-        );
+        emit ScoreSubmitted(domainTokenId, score, msg.sender, block.timestamp);
     }
 
     /**
@@ -426,10 +424,7 @@ contract AIOracleUpgradeable is
      *      This order ensures submitPaidScore() works immediately after configuration
      * @param _serviceManagerAddress The ServiceManager address to configure
      */
-    function configureServiceManager(address _serviceManagerAddress)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function configureServiceManager(address _serviceManagerAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         // Step 1: Register FIRST - grants SERVICE_MANAGER_ROLE
         // This allows ServiceManager to call submitPaidScore()
         _registerServiceManager(_serviceManagerAddress);
@@ -444,10 +439,7 @@ contract AIOracleUpgradeable is
      * @notice Set the AVS ServiceManager address for task creation
      * @dev Prefer using configureServiceManager() for atomic setup
      */
-    function setServiceManagerAddress(address _serviceManagerAddress)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function setServiceManagerAddress(address _serviceManagerAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setServiceManagerAddress(_serviceManagerAddress);
     }
 
@@ -455,10 +447,7 @@ contract AIOracleUpgradeable is
      * @notice Register a service manager (grants scoring permissions)
      * @dev Prefer using configureServiceManager() for atomic setup
      */
-    function registerServiceManager(address serviceManager)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function registerServiceManager(address serviceManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _registerServiceManager(serviceManager);
     }
 
