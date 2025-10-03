@@ -54,6 +54,150 @@ export class DomainController {
     private readonly indexerService: IndexerService,
   ) {}
 
+  @Get('summary')
+  @ApiOperation({
+    summary: 'Get domain statistics summary',
+    description: 'Retrieve comprehensive statistics about all domains including total scored domains, average scores, liquidated domains, and more'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Domain summary statistics retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        totalScoredDomains: { type: 'number' },
+        averageAiScore: { type: 'number' },
+        totalLiquidatedDomains: { type: 'number' },
+        totalActiveDomains: { type: 'number' },
+        totalLoanVolume: { type: 'string' },
+        totalLoansCreated: { type: 'number' },
+        domainsWithActiveLoans: { type: 'number' },
+        scoreDistribution: {
+          type: 'object',
+          properties: {
+            '0-20': { type: 'number' },
+            '21-40': { type: 'number' },
+            '41-60': { type: 'number' },
+            '61-80': { type: 'number' },
+            '81-100': { type: 'number' }
+          }
+        },
+        recentActivity: {
+          type: 'object',
+          properties: {
+            lastScored: { type: 'string' },
+            lastLoan: { type: 'string' },
+            lastLiquidation: { type: 'string' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getDomainSummary(): Promise<any> {
+    this.logger.log('Getting domain summary statistics');
+
+    try {
+      // Get all domain analytics to calculate summary statistics
+      const domainData = await this.indexerService.queryDomains({
+        where: {},
+        limit: 1000, // Maximum allowed by GraphQL API
+        orderBy: 'lastActivityTimestamp',
+        orderDirection: 'desc'
+      });
+
+      const domains = domainData.domainAnalyticss?.items || [];
+
+      if (domains.length === 0) {
+        return {
+          totalScoredDomains: 0,
+          averageAiScore: 0,
+          totalLiquidatedDomains: 0,
+          totalActiveDomains: 0,
+          totalLoanVolume: '0',
+          totalLoansCreated: 0,
+          domainsWithActiveLoans: 0,
+          scoreDistribution: {
+            '0-20': 0,
+            '21-40': 0,
+            '41-60': 0,
+            '61-80': 0,
+            '81-100': 0
+          },
+          recentActivity: {
+            lastScored: null,
+            lastLoan: null,
+            lastLiquidation: null
+          }
+        };
+      }
+
+      // Calculate statistics
+      const totalScoredDomains = domains.length;
+      const totalLiquidatedDomains = domains.filter(d => d.hasBeenLiquidated).length;
+      const totalActiveDomains = domains.filter(d => !d.hasBeenLiquidated).length;
+      
+      // Calculate average AI score
+      const totalScore = domains.reduce((sum, d) => sum + (d.latestAiScore || 0), 0);
+      const averageAiScore = totalScoredDomains > 0 ? Math.round(totalScore / totalScoredDomains) : 0;
+
+      // Calculate total loan volume and loans created
+      const totalLoanVolume = domains.reduce((sum, d) => sum + BigInt(d.totalLoanVolume || '0'), BigInt(0));
+      const totalLoansCreated = domains.reduce((sum, d) => sum + (d.totalLoansCreated || 0), 0);
+      
+      // Count domains with active loans (assuming domains with loan history that aren't liquidated)
+      const domainsWithActiveLoans = domains.filter(d => 
+        !d.hasBeenLiquidated && (d.totalLoansCreated || 0) > 0
+      ).length;
+
+      // Calculate score distribution
+      const scoreDistribution = {
+        '0-20': 0,
+        '21-40': 0,
+        '41-60': 0,
+        '61-80': 0,
+        '81-100': 0
+      };
+
+      domains.forEach(domain => {
+        const score = domain.latestAiScore || 0;
+        if (score <= 20) scoreDistribution['0-20']++;
+        else if (score <= 40) scoreDistribution['21-40']++;
+        else if (score <= 60) scoreDistribution['41-60']++;
+        else if (score <= 80) scoreDistribution['61-80']++;
+        else scoreDistribution['81-100']++;
+      });
+
+      // Find recent activity timestamps
+      const sortedByScore = [...domains].sort((a, b) => 
+        new Date(b.firstScoreTimestamp || 0).getTime() - new Date(a.firstScoreTimestamp || 0).getTime()
+      );
+      const sortedByActivity = [...domains].sort((a, b) => 
+        new Date(b.lastActivityTimestamp || 0).getTime() - new Date(a.lastActivityTimestamp || 0).getTime()
+      );
+      const liquidatedDomains = domains.filter(d => d.hasBeenLiquidated);
+
+      return {
+        totalScoredDomains,
+        averageAiScore,
+        totalLiquidatedDomains,
+        totalActiveDomains,
+        totalLoanVolume: totalLoanVolume.toString(),
+        totalLoansCreated,
+        domainsWithActiveLoans,
+        scoreDistribution,
+        recentActivity: {
+          lastScored: sortedByScore[0]?.firstScoreTimestamp || null,
+          lastLoan: sortedByActivity[0]?.lastActivityTimestamp || null,
+          lastLiquidation: liquidatedDomains.length > 0 ? liquidatedDomains[0].lastActivityTimestamp : null
+        }
+      };
+    } catch (error) {
+      this.logger.error('Failed to get domain summary:', error);
+      throw new HttpException('Failed to fetch domain summary', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Get all scored domains',

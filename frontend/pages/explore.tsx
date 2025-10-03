@@ -332,10 +332,77 @@ const PoolsPage: NextPage = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded"></div>
+            {/* Header */}
+            <div className="mb-8 flex justify-between items-center">
+              <div>
+                <div className="h-8 bg-gray-200 rounded mb-2 w-32"></div>
+                <div className="h-4 bg-gray-200 rounded w-48"></div>
+              </div>
+              <div className="h-10 bg-gray-200 rounded w-32"></div>
+            </div>
+
+            {/* Stats Overview - 4 columns */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+              ))}
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-6">
+              <div className="h-12 bg-gray-200 rounded-xl w-full"></div>
+            </div>
+
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-3 px-4 py-3 mb-2">
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+            </div>
+
+            {/* Pool Rows */}
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="grid grid-cols-12 gap-3 px-4 py-4 bg-white rounded-xl border border-gray-200">
+                  {/* Pool Name */}
+                  <div className="col-span-2 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                    <div className="h-4 bg-gray-200 rounded w-20"></div>
+                  </div>
+                  {/* Total Liquidity */}
+                  <div className="col-span-2 text-right">
+                    <div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div>
+                  </div>
+                  {/* Available */}
+                  <div className="col-span-2 text-right">
+                    <div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div>
+                  </div>
+                  {/* APY */}
+                  <div className="col-span-1 text-right">
+                    <div className="h-4 bg-gray-200 rounded w-12 ml-auto"></div>
+                  </div>
+                  {/* Min Score */}
+                  <div className="col-span-1 text-center">
+                    <div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div>
+                  </div>
+                  {/* Duration Range */}
+                  <div className="col-span-2 text-center">
+                    <div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div>
+                  </div>
+                  {/* Loan Range */}
+                  <div className="col-span-1 text-center">
+                    <div className="h-4 bg-gray-200 rounded w-12 mx-auto"></div>
+                  </div>
+                  {/* Actions */}
+                  <div className="col-span-1 flex items-center gap-2">
+                    <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>

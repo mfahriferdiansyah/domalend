@@ -331,6 +331,68 @@ export const transactionSteps = {
     }
   ],
 
+  // Instant Loan Request Steps
+  requestInstantLoan: {
+    withApproval: [
+      {
+        id: 'checking_domain_approval',
+        title: 'Checking Domain Approval',
+        description: 'Verifying domain approval for collateral use...',
+        status: 'pending' as const
+      },
+      {
+        id: 'simulating_domain_approval',
+        title: 'Simulating Domain Approval',
+        description: 'Testing the domain approval transaction...',
+        status: 'pending' as const
+      },
+      {
+        id: 'approving_domain',
+        title: 'Approving Domain',
+        description: 'Please confirm the domain approval in your wallet...',
+        status: 'pending' as const
+      },
+      {
+        id: 'waiting_approval_confirmation',
+        title: 'Waiting for Approval Confirmation',
+        description: 'Waiting for domain approval to be confirmed on-chain...',
+        status: 'pending' as const
+      },
+      {
+        id: 'simulating_instant_loan',
+        title: 'Simulating Instant Loan Request',
+        description: 'Testing the instant loan request transaction...',
+        status: 'pending' as const
+      },
+      {
+        id: 'requesting_instant_loan',
+        title: 'Requesting Instant Loan',
+        description: 'Please confirm the instant loan request in your wallet...',
+        status: 'pending' as const
+      }
+    ],
+    withoutApproval: [
+      {
+        id: 'checking_domain_approval',
+        title: 'Checking Domain Approval',
+        description: 'Verifying domain approval for collateral use...',
+        status: 'pending' as const
+      },
+      {
+        id: 'simulating_instant_loan',
+        title: 'Simulating Instant Loan Request',
+        description: 'Testing the instant loan request transaction...',
+        status: 'pending' as const
+      },
+      {
+        id: 'requesting_instant_loan',
+        title: 'Requesting Instant Loan',
+        description: 'Please confirm the instant loan request in your wallet...',
+        status: 'pending' as const
+      }
+    ]
+  },
+
   // Loan Repayment Steps
   repayLoan: {
     withApproval: [

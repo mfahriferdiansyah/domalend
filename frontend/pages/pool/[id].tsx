@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SiteIcon } from '@/components/ui/site-icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TransactionStep, transactionSteps } from '@/components/ui/transaction-progress';
+import { InstantLoanProgress, InstantLoanStep } from '@/components/ui/instant-loan-progress';
 import { usePool as usePoolRaw, useUserDomains, useUserScoredDomains } from '@/hooks/useDomaLendApi';
 import { useUserDomainsWithScoring } from '@/hooks/useUserDomainsWithScoring';
 import { usePoolById } from '@/hooks/usePoolData';
-import { TransactionProgress, useDomainScore, useDomaLend, useInstantLoanEligibility, useUSDCAllowance, useUSDCBalance } from '@/hooks/web3/domalend/useDomaLend';
+import { TransactionProgress, useDomainScore, useDomaLend, useInstantLoanEligibility, useUSDCBalance } from '@/hooks/web3/domalend/useDomaLend';
 import { useUserPoolShares } from '@/hooks/web3/domalend/useUserPoolShares';
 import { formatBasisPoints, formatUSDC } from '@/utils/formatting';
 import {
@@ -57,6 +58,13 @@ const formatAPY = (apy: string | number | undefined, interestRate?: string | num
   return apyNum.toFixed(2) + '%';
 };
 
+// Helper function to format duration from seconds to human readable
+const formatDuration = (seconds: string | number): string => {
+  const secs = typeof seconds === 'string' ? parseInt(seconds) : seconds;
+  const days = Math.floor(secs / 86400);
+  return `${days}d`;
+};
+
 const PoolDetailPage: NextPage = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -66,16 +74,15 @@ const PoolDetailPage: NextPage = () => {
   const { data: rawPoolData, loading: rawDataLoading, error: rawDataError } = usePoolRaw(poolId, true, true); // Include both loans and history
 
   // Debug pool history data
-  const { addLiquidity, removeLiquidity, requestLoan, isLoading: isTransactionLoading, error: transactionError, contracts } = useDomaLend();
+  const { addLiquidity, removeLiquidity, requestLoan, isLoading: isTransactionLoading, error: transactionError } = useDomaLend();
   const { address } = useAccount();
   const { data: userDomainsData } = useUserDomains(address);
   const { data: userScoredDomainsData } = useUserScoredDomains(address);
   const { eligibleDomains, domainScoringStatus, loading: domainsLoading, error: domainsError, refresh: refreshDomains } = useUserDomainsWithScoring(address);
 
   // USDC related hooks
-  const { allowance: usdcAllowance } = useUSDCAllowance(address, contracts.SATORU_LENDING);
   const { balance: usdcBalance } = useUSDCBalance(address);
-  
+
   // User liquidity position hook
   const { userLiquidityData, hasLiquidity } = useUserPoolShares(poolId);
 
@@ -101,16 +108,23 @@ const PoolDetailPage: NextPage = () => {
   const [isRemoveLiquidityCompleted, setIsRemoveLiquidityCompleted] = useState(false);
   const [removeLiquidityError, setRemoveLiquidityError] = useState<string>('');
 
+  // Instant loan progress dialog states
+  const [isInstantLoanProgressOpen, setIsInstantLoanProgressOpen] = useState(false);
+  const [instantLoanSteps, setInstantLoanSteps] = useState<InstantLoanStep[]>([]);
+  const [currentInstantLoanStep, setCurrentInstantLoanStep] = useState<string>('');
+  const [isInstantLoanCompleted, setIsInstantLoanCompleted] = useState(false);
+  const [instantLoanError, setInstantLoanError] = useState<string>('');
+
   // Helper functions for progress steps
   const initializeAddLiquiditySteps = (requiresApproval: boolean): TransactionStep[] => {
-    return requiresApproval 
+    return requiresApproval
       ? [...transactionSteps.addLiquidity.withApproval]
       : [...transactionSteps.addLiquidity.withoutApproval];
   };
 
   const updateAddLiquidityStep = (stepId: string, status: TransactionStep['status'], txHash?: string) => {
-    setAddLiquiditySteps(prev => prev.map(step => 
-      step.id === stepId 
+    setAddLiquiditySteps(prev => prev.map(step =>
+      step.id === stepId
         ? { ...step, status, txHash }
         : step
     ));
@@ -118,7 +132,7 @@ const PoolDetailPage: NextPage = () => {
 
   const handleAddLiquidityProgress = (progress: TransactionProgress) => {
     setCurrentAddLiquidityStep(progress.step);
-    
+
     // After checking allowance, adjust steps if no approval is needed
     if (progress.step === 'checking_allowance' && !progress.txHash) {
       if (progress.message.includes('sufficient')) {
@@ -128,10 +142,10 @@ const PoolDetailPage: NextPage = () => {
         return;
       }
     }
-    
+
     // Update current step to in_progress
     updateAddLiquidityStep(progress.step, 'in_progress');
-    
+
     // If there's a transaction hash, mark as completed
     if (progress.txHash) {
       updateAddLiquidityStep(progress.step, 'completed', progress.txHash);
@@ -143,8 +157,8 @@ const PoolDetailPage: NextPage = () => {
   };
 
   const updateRemoveLiquidityStep = (stepId: string, status: TransactionStep['status'], txHash?: string) => {
-    setRemoveLiquiditySteps(prev => prev.map(step => 
-      step.id === stepId 
+    setRemoveLiquiditySteps(prev => prev.map(step =>
+      step.id === stepId
         ? { ...step, status, txHash }
         : step
     ));
@@ -152,13 +166,50 @@ const PoolDetailPage: NextPage = () => {
 
   const handleRemoveLiquidityProgress = (progress: TransactionProgress) => {
     setCurrentRemoveLiquidityStep(progress.step);
-    
+
     // Update current step to in_progress
     updateRemoveLiquidityStep(progress.step, 'in_progress');
-    
+
     // If there's a transaction hash, mark as completed
     if (progress.txHash) {
       updateRemoveLiquidityStep(progress.step, 'completed', progress.txHash);
+    }
+  };
+
+  // Helper functions for instant loan progress
+  const initializeInstantLoanSteps = (requiresApproval: boolean): InstantLoanStep[] => {
+    return requiresApproval
+      ? [...transactionSteps.requestInstantLoan.withApproval]
+      : [...transactionSteps.requestInstantLoan.withoutApproval];
+  };
+
+  const updateInstantLoanStep = (stepId: string, status: InstantLoanStep['status'], txHash?: string) => {
+    setInstantLoanSteps(prev => prev.map(step =>
+      step.id === stepId
+        ? { ...step, status, txHash }
+        : step
+    ));
+  };
+
+  const handleInstantLoanProgress = (progress: TransactionProgress) => {
+    setCurrentInstantLoanStep(progress.step);
+
+    // After checking domain approval, adjust steps if no approval is needed
+    if (progress.step === 'checking_domain_approval' && !progress.txHash) {
+      if (progress.message.includes('already approved')) {
+        const stepsWithoutApproval = initializeInstantLoanSteps(false);
+        stepsWithoutApproval[0].status = 'completed';
+        setInstantLoanSteps(stepsWithoutApproval);
+        return;
+      }
+    }
+
+    // Update current step to in_progress
+    updateInstantLoanStep(progress.step, 'in_progress');
+
+    // If there's a transaction hash, mark as completed
+    if (progress.txHash) {
+      updateInstantLoanStep(progress.step, 'completed', progress.txHash);
     }
   };
 
@@ -199,11 +250,11 @@ const PoolDetailPage: NextPage = () => {
     poolId,
     loanAmount
   );
-  
+
   // Debug: Check smart contract score vs indexer score
   const { score: contractScore, timestamp: contractTimestamp } = useDomainScore(selectedDomainId);
   const selectedDomain = userDomains.find((d: any) => d.tokenId === selectedDomainId);
-  
+
   // Log comparison between contract and indexer scores
   if (selectedDomainId) {
     console.log('🔍 Score Comparison Debug:', {
@@ -246,7 +297,7 @@ const PoolDetailPage: NextPage = () => {
   const getDomainStatusInfo = (domain: any) => {
     const status = domainScoringStatus.find(s => s.tokenId === domain.tokenId);
     if (!status) return { text: 'Unknown', color: 'gray' };
-    
+
     if (!status.hasAnalytics) return { text: 'Not scored', color: 'gray' };
     if (!status.hasScoringEvents) return { text: 'Scoring incomplete', color: 'orange' };
     if (!status.hasCompletedScoring) return { text: 'Scoring in progress', color: 'blue' };
@@ -267,7 +318,7 @@ const PoolDetailPage: NextPage = () => {
       setIsAddLiquidityProgressOpen(true);
       setIsAddLiquidityCompleted(false);
       setAddLiquidityError('');
-      
+
       // Initialize with default steps (will be updated based on approval needs)
       const initialSteps = initializeAddLiquiditySteps(true); // Start with approval assumption
       setAddLiquiditySteps(initialSteps);
@@ -276,15 +327,15 @@ const PoolDetailPage: NextPage = () => {
 
       if (result.success) {
         // Mark all remaining steps as completed
-        setAddLiquiditySteps(prev => prev.map(step => 
-          step.status === 'pending' || step.status === 'in_progress' 
+        setAddLiquiditySteps(prev => prev.map(step =>
+          step.status === 'pending' || step.status === 'in_progress'
             ? { ...step, status: 'completed' }
             : step
         ));
-        
+
         setIsAddLiquidityCompleted(true);
         setLiquidityAmount('');
-        
+
         toast.success(result.message || 'Liquidity added successfully!');
       } else {
         throw new Error(result.error || 'Failed to add liquidity');
@@ -292,7 +343,7 @@ const PoolDetailPage: NextPage = () => {
     } catch (error: any) {
       console.error('Error adding liquidity:', error);
       setAddLiquidityError(error.message || 'Failed to add liquidity. Please try again.');
-      
+
       // Mark current step as failed
       if (currentAddLiquidityStep) {
         updateAddLiquidityStep(currentAddLiquidityStep, 'failed');
@@ -317,7 +368,7 @@ const PoolDetailPage: NextPage = () => {
       setIsRemoveLiquidityProgressOpen(true);
       setIsRemoveLiquidityCompleted(false);
       setRemoveLiquidityError('');
-      
+
       // Initialize steps for liquidity removal
       const initialSteps = initializeRemoveLiquiditySteps();
       setRemoveLiquiditySteps(initialSteps);
@@ -326,15 +377,15 @@ const PoolDetailPage: NextPage = () => {
 
       if (result.success) {
         // Mark all remaining steps as completed
-        setRemoveLiquiditySteps(prev => prev.map(step => 
-          step.status === 'pending' || step.status === 'in_progress' 
+        setRemoveLiquiditySteps(prev => prev.map(step =>
+          step.status === 'pending' || step.status === 'in_progress'
             ? { ...step, status: 'completed' }
             : step
         ));
-        
+
         setIsRemoveLiquidityCompleted(true);
         setWithdrawPercentage('');
-        
+
         toast.success(result.message || 'Liquidity removed successfully!');
       } else {
         throw new Error(result.error || 'Failed to remove liquidity');
@@ -342,7 +393,7 @@ const PoolDetailPage: NextPage = () => {
     } catch (error: any) {
       console.error('Error removing liquidity:', error);
       setRemoveLiquidityError(error.message || 'Failed to remove liquidity. Please try again.');
-      
+
       // Mark current step as failed
       if (currentRemoveLiquidityStep) {
         updateRemoveLiquidityStep(currentRemoveLiquidityStep, 'failed');
@@ -351,9 +402,32 @@ const PoolDetailPage: NextPage = () => {
   };
 
   const handleRequestInstantLoan = async () => {
-    if (!selectedDomainId || !loanAmount || !loanDuration || !poolId) {
-      toast.error('Please fill in all loan details');
+    if (!selectedDomainId || !loanAmount || !loanDuration || !poolId || !address) {
+      toast.error('Please fill in all loan details and connect your wallet');
       return;
+    }
+
+    // Validate loan amount against pool limits
+    if (pool) {
+      const loanAmountNum = parseFloat(loanAmount);
+      // Convert raw USDC amounts (6 decimals) to human readable amounts
+      const minLoanAmountNum = parseInt(pool.minLoanAmount || '0') / 1_000_000;
+      const maxLoanAmountNum = parseInt(pool.maxLoanAmount || '0') / 1_000_000;
+
+      if (loanAmountNum < minLoanAmountNum || loanAmountNum > maxLoanAmountNum) {
+        toast.error(`Loan amount must be between $${minLoanAmountNum.toLocaleString()} and $${maxLoanAmountNum.toLocaleString()}`);
+        return;
+      }
+
+      // Validate loan duration against pool limits
+      const loanDurationNum = parseInt(loanDuration);
+      const minDurationDays = Math.floor(parseInt(pool.minDuration || '0') / 86400);
+      const maxDurationDays = Math.floor(parseInt(pool.maxDuration || '0') / 86400);
+
+      if (loanDurationNum < minDurationDays || loanDurationNum > maxDurationDays) {
+        toast.error(`Loan duration must be between ${minDurationDays} and ${maxDurationDays} days`);
+        return;
+      }
     }
 
     if (!eligible) {
@@ -362,24 +436,50 @@ const PoolDetailPage: NextPage = () => {
     }
 
     try {
+      // Open progress dialog and initialize state
+      setIsInstantLoanProgressOpen(true);
+      setIsInstantLoanCompleted(false);
+      setInstantLoanError('');
+
+      // Initialize with default steps (will be updated based on approval needs)
+      const initialSteps = initializeInstantLoanSteps(true); // Start with approval assumption
+      setInstantLoanSteps(initialSteps);
+
       const result = await requestLoan(
         selectedDomainId,
         loanAmount,
-        parseInt(loanDuration),
-        poolId
+        parseInt(loanDuration) * 86400, // Convert days to seconds
+        poolId,
+        handleInstantLoanProgress
       );
 
       if (result.success) {
-        toast.success(`Instant loan request submitted! Transaction hash: ${result.hash}`);
+        // Mark all remaining steps as completed
+        setInstantLoanSteps(prev => prev.map(step =>
+          step.status === 'pending' || step.status === 'in_progress'
+            ? { ...step, status: 'completed' }
+            : step
+        ));
+
+        setIsInstantLoanCompleted(true);
+
+        // Reset form
         setSelectedDomainId('');
         setLoanAmount('');
         setLoanDuration('');
+
+        toast.success(result.message || 'Instant loan request submitted successfully!');
       } else {
         throw new Error(result.error || 'Failed to request instant loan');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error requesting instant loan:', error);
-      toast.error('Failed to request instant loan. Please try again.');
+      setInstantLoanError(error.message || 'Failed to request instant loan. Please try again.');
+
+      // Mark current step as failed
+      if (currentInstantLoanStep) {
+        updateInstantLoanStep(currentInstantLoanStep, 'failed');
+      }
     }
   };
 
@@ -396,7 +496,7 @@ const PoolDetailPage: NextPage = () => {
       setIsAddLiquidityProgressOpen(true);
       setIsAddLiquidityCompleted(false);
       setAddLiquidityError('');
-      
+
       // Initialize with default steps (will be updated based on approval needs)
       const initialSteps = initializeAddLiquiditySteps(true); // Start with approval assumption
       setAddLiquiditySteps(initialSteps);
@@ -405,15 +505,15 @@ const PoolDetailPage: NextPage = () => {
 
       if (result.success) {
         // Mark all remaining steps as completed
-        setAddLiquiditySteps(prev => prev.map(step => 
-          step.status === 'pending' || step.status === 'in_progress' 
+        setAddLiquiditySteps(prev => prev.map(step =>
+          step.status === 'pending' || step.status === 'in_progress'
             ? { ...step, status: 'completed' }
             : step
         ));
-        
+
         setIsAddLiquidityCompleted(true);
         setDialogLiquidityAmount('');
-        
+
         toast.success(result.message || 'Liquidity added successfully!');
       } else {
         throw new Error(result.error || 'Failed to add liquidity');
@@ -421,7 +521,7 @@ const PoolDetailPage: NextPage = () => {
     } catch (error: any) {
       console.error('Error adding liquidity:', error);
       setAddLiquidityError(error.message || 'Failed to add liquidity. Please try again.');
-      
+
       // Mark current step as failed
       if (currentAddLiquidityStep) {
         updateAddLiquidityStep(currentAddLiquidityStep, 'failed');
@@ -447,7 +547,7 @@ const PoolDetailPage: NextPage = () => {
       setIsRemoveLiquidityProgressOpen(true);
       setIsRemoveLiquidityCompleted(false);
       setRemoveLiquidityError('');
-      
+
       // Initialize steps for liquidity removal
       const initialSteps = initializeRemoveLiquiditySteps();
       setRemoveLiquiditySteps(initialSteps);
@@ -456,15 +556,15 @@ const PoolDetailPage: NextPage = () => {
 
       if (result.success) {
         // Mark all remaining steps as completed
-        setRemoveLiquiditySteps(prev => prev.map(step => 
-          step.status === 'pending' || step.status === 'in_progress' 
+        setRemoveLiquiditySteps(prev => prev.map(step =>
+          step.status === 'pending' || step.status === 'in_progress'
             ? { ...step, status: 'completed' }
             : step
         ));
-        
+
         setIsRemoveLiquidityCompleted(true);
         setDialogWithdrawPercentage('');
-        
+
         toast.success(result.message || 'Liquidity removed successfully!');
       } else {
         throw new Error(result.error || 'Failed to remove liquidity');
@@ -472,7 +572,7 @@ const PoolDetailPage: NextPage = () => {
     } catch (error: any) {
       console.error('Error removing liquidity:', error);
       setRemoveLiquidityError(error.message || 'Failed to remove liquidity. Please try again.');
-      
+
       // Mark current step as failed
       if (currentRemoveLiquidityStep) {
         updateRemoveLiquidityStep(currentRemoveLiquidityStep, 'failed');
@@ -545,9 +645,8 @@ const PoolDetailPage: NextPage = () => {
                         : 'bg-purple-100 text-purple-800'
                   }
                 >
-                  {pool.poolType} Pool
+                  {pool.poolType} pool
                 </Badge>
-                <span className="text-sm text-gray-500">Pool ID: {pool.poolId}</span>
               </div>
             </div>
 
@@ -781,7 +880,7 @@ const PoolDetailPage: NextPage = () => {
                             <AlertDescription className="text-amber-800">
                               {userOwnedDomains.length === 0 ? (
                                 <>
-                                  You don&apos;t own any domains yet. 
+                                  You don&apos;t own any domains yet.
                                   <Link href="/domains" className="underline hover:text-amber-900 ml-1">
                                     View available domains
                                   </Link>
@@ -802,11 +901,11 @@ const PoolDetailPage: NextPage = () => {
                                             <span>{status.name}:</span>
                                             <span>
                                               {!status.hasAnalytics ? 'Not scored' :
-                                               !status.hasScoringEvents ? 'Scoring incomplete' :
-                                               !status.hasCompletedScoring ? 'Scoring in progress' :
-                                               status.isUsedAsCollateral ? 'Used as collateral' :
-                                               status.isLiquidated ? 'Liquidated' :
-                                               status.latestScore <= 0 ? 'Invalid score' : 'Eligible'}
+                                                !status.hasScoringEvents ? 'Scoring incomplete' :
+                                                  !status.hasCompletedScoring ? 'Scoring in progress' :
+                                                    status.isUsedAsCollateral ? 'Used as collateral' :
+                                                      status.isLiquidated ? 'Liquidated' :
+                                                        status.latestScore <= 0 ? 'Invalid score' : 'Eligible'}
                                             </span>
                                           </div>
                                         ))}
@@ -848,52 +947,51 @@ const PoolDetailPage: NextPage = () => {
                                     const isEligible = userDomains.some(eligible => eligible.tokenId === domain.tokenId);
                                     const statusInfo = getDomainStatusInfo(domain);
                                     return (
-                                    <SelectItem 
-                                      key={domain.tokenId} 
-                                      value={domain.tokenId}
-                                      disabled={!isEligible}
-                                      className={`py-3 px-3 ${isEligible ? 'cursor-pointer hover:bg-gray-50 focus:bg-gray-50' : 'cursor-not-allowed opacity-60 bg-gray-50'}`}
-                                    >
-                                      <div className="flex items-center justify-between w-full min-w-0">
-                                        <div className="flex-1 min-w-0 mr-3">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <SiteIcon 
-                                              domain={domain.name} 
-                                              size={16} 
-                                              className="flex-shrink-0"
-                                            />
-                                            <span 
-                                              className="font-medium truncate" 
-                                              title={domain.name}
-                                            >
-                                              {domain.name}
-                                            </span>
+                                      <SelectItem
+                                        key={domain.tokenId}
+                                        value={domain.tokenId}
+                                        disabled={!isEligible}
+                                        className={`py-3 px-3 ${isEligible ? 'cursor-pointer hover:bg-gray-50 focus:bg-gray-50' : 'cursor-not-allowed opacity-60 bg-gray-50'}`}
+                                      >
+                                        <div className="flex items-center justify-between w-full min-w-0">
+                                          <div className="flex-1 min-w-0 mr-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <SiteIcon
+                                                domain={domain.name}
+                                                size={16}
+                                                className="flex-shrink-0"
+                                              />
+                                              <span
+                                                className="font-medium truncate"
+                                                title={domain.name}
+                                              >
+                                                {domain.name}
+                                              </span>
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                              ID: {truncateTokenId(domain.tokenId)}
+                                            </div>
                                           </div>
-                                          <div className="text-xs text-gray-500">
-                                            ID: {truncateTokenId(domain.tokenId)}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                          {/* Status Badge */}
-                                          <Badge className={`text-xs px-2 py-1 ${
-                                            statusInfo.color === 'green' ? 'bg-green-100 text-green-800' :
-                                            statusInfo.color === 'blue' ? 'bg-blue-100 text-blue-800' :
-                                            statusInfo.color === 'orange' ? 'bg-orange-100 text-orange-800' :
-                                            statusInfo.color === 'red' ? 'bg-red-100 text-red-800' :
-                                            'bg-gray-100 text-gray-800'
-                                          }`}>
-                                            {statusInfo.text}
-                                          </Badge>
-                                          
-                                          {/* Score Badge */}
-                                          {domain.analytics?.latestAiScore && (
-                                            <Badge className={`${getScoreColor(domain.analytics.latestAiScore)} text-xs px-2 py-1`}>
-                                              {domain.analytics.latestAiScore}/100
+                                          <div className="flex items-center gap-2 flex-shrink-0">
+                                            {/* Status Badge */}
+                                            <Badge className={`text-xs px-2 py-1 ${statusInfo.color === 'green' ? 'bg-green-100 text-green-800' :
+                                              statusInfo.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                                                statusInfo.color === 'orange' ? 'bg-orange-100 text-orange-800' :
+                                                  statusInfo.color === 'red' ? 'bg-red-100 text-red-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                              }`}>
+                                              {statusInfo.text}
                                             </Badge>
-                                          )}
+
+                                            {/* Score Badge */}
+                                            {domain.analytics?.latestAiScore && (
+                                              <Badge className={`${getScoreColor(domain.analytics.latestAiScore)} text-xs px-2 py-1`}>
+                                                {domain.analytics.latestAiScore}/100
+                                              </Badge>
+                                            )}
+                                          </div>
                                         </div>
-                                      </div>
-                                    </SelectItem>
+                                      </SelectItem>
                                     );
                                   })}
                                 </SelectContent>
@@ -908,7 +1006,8 @@ const PoolDetailPage: NextPage = () => {
                                 placeholder="Enter loan amount"
                                 value={loanAmount}
                                 onChange={(e) => setLoanAmount(e.target.value)}
-                                min="0"
+                                min={pool ? formatUSDC(pool.minLoanAmount || '0') : '0'}
+                                max={pool ? formatUSDC(pool.maxLoanAmount || '0') : undefined}
                                 step="0.01"
                               />
                               {pool && (
@@ -926,9 +1025,15 @@ const PoolDetailPage: NextPage = () => {
                                 placeholder="Enter loan duration"
                                 value={loanDuration}
                                 onChange={(e) => setLoanDuration(e.target.value)}
-                                min="1"
+                                min={pool ? Math.floor(parseInt(pool.minDuration || '0') / 86400).toString() : '1'}
+                                max={pool ? Math.floor(parseInt(pool.maxDuration || '0') / 86400).toString() : undefined}
                                 step="1"
                               />
+                              {pool && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Pool range: {formatDuration(pool.minDuration || '0')} - {formatDuration(pool.maxDuration || '0')}
+                                </p>
+                              )}
                             </div>
 
                             {/* Eligibility Check */}
@@ -950,10 +1055,11 @@ const PoolDetailPage: NextPage = () => {
                             <Button
                               onClick={handleRequestInstantLoan}
                               disabled={!selectedDomainId || !loanAmount || !loanDuration || !eligible || isTransactionLoading}
-                              className="w-full"
+                              className="w-full bg-blue-600 hover:bg-blue-700"
                             >
                               {isTransactionLoading ? 'Requesting Loan...' : 'Request Instant Loan'}
                             </Button>
+                            
                           </>
                         )}
                       </CardContent>
@@ -1023,13 +1129,13 @@ const PoolDetailPage: NextPage = () => {
                             )}
                           </div>
                         )}
-                        
+
                         {!hasLiquidity && address && (
                           <div className="p-3 bg-gray-50 rounded-lg">
                             <div className="text-sm text-gray-600">You don&apos;t have any liquidity in this pool.</div>
                           </div>
                         )}
-                        
+
                         <div>
                           <Label htmlFor="withdrawPercentage">Percentage to Withdraw</Label>
                           <Input
@@ -1044,7 +1150,7 @@ const PoolDetailPage: NextPage = () => {
                             disabled={!hasLiquidity}
                           />
                         </div>
-                        
+
                         {hasLiquidity && (
                           <div className="flex gap-2 flex-wrap">
                             <Button
@@ -1077,7 +1183,7 @@ const PoolDetailPage: NextPage = () => {
                             </Button>
                           </div>
                         )}
-                        
+
                         <Button
                           onClick={handleRemoveLiquidity}
                           disabled={!withdrawPercentage || isTransactionLoading || !hasLiquidity}
@@ -1201,9 +1307,16 @@ const PoolDetailPage: NextPage = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <div className="text-sm text-gray-600">Loan Range</div>
+                  <div className="text-sm text-gray-600">Loan Amount Range</div>
                   <div className="font-semibold">
                     ${formatUSDC(pool.minLoanAmount || '0')} - ${formatUSDC(pool.maxLoanAmount || '0')}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm text-gray-600">Loan Duration Range</div>
+                  <div className="font-semibold">
+                    {formatDuration(pool.minDuration || '0')} - {formatDuration(pool.maxDuration || '0')}
                   </div>
                 </div>
 
@@ -1341,7 +1454,7 @@ const PoolDetailPage: NextPage = () => {
               <p className="text-sm text-gray-600 mb-4">
                 Enter the percentage of your liquidity position you want to withdraw.
               </p>
-              
+
               {/* User's Current Position */}
               {hasLiquidity && (
                 <div className="p-3 bg-blue-50 rounded-lg space-y-2">
@@ -1358,13 +1471,13 @@ const PoolDetailPage: NextPage = () => {
                   )}
                 </div>
               )}
-              
+
               {!hasLiquidity && address && (
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <div className="text-sm text-gray-600">You don&apos;t have any liquidity in this pool.</div>
                 </div>
               )}
-              
+
               <div>
                 <Label htmlFor="dialogWithdrawPercentage">Percentage to Withdraw</Label>
                 <Input
@@ -1379,41 +1492,41 @@ const PoolDetailPage: NextPage = () => {
                   disabled={!hasLiquidity}
                 />
               </div>
-              
+
               {/* Show actual amounts for percentages */}
               {hasLiquidity && (
                 <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDialogWithdrawPercentage('25')}
-                    >
-                      25% (${((userLiquidityData.currentLiquidity * 0.25) / 1e6).toLocaleString()})
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDialogWithdrawPercentage('50')}
-                    >
-                      50% (${((userLiquidityData.currentLiquidity * 0.50) / 1e6).toLocaleString()})
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDialogWithdrawPercentage('75')}
-                    >
-                      75% (${((userLiquidityData.currentLiquidity * 0.75) / 1e6).toLocaleString()})
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDialogWithdrawPercentage('100')}
-                    >
-                      100% (${(userLiquidityData.currentLiquidity / 1e6).toLocaleString()})
-                    </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogWithdrawPercentage('25')}
+                  >
+                    25% (${((userLiquidityData.currentLiquidity * 0.25) / 1e6).toLocaleString()})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogWithdrawPercentage('50')}
+                  >
+                    50% (${((userLiquidityData.currentLiquidity * 0.50) / 1e6).toLocaleString()})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogWithdrawPercentage('75')}
+                  >
+                    75% (${((userLiquidityData.currentLiquidity * 0.75) / 1e6).toLocaleString()})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogWithdrawPercentage('100')}
+                  >
+                    100% (${(userLiquidityData.currentLiquidity / 1e6).toLocaleString()})
+                  </Button>
                 </div>
               )}
-              
+
               {/* Show preview of withdrawal amount */}
               {hasLiquidity && dialogWithdrawPercentage && (
                 <div className="p-3 bg-gray-50 rounded-lg">
@@ -1484,6 +1597,22 @@ const PoolDetailPage: NextPage = () => {
           isCompleted={isRemoveLiquidityCompleted}
           error={removeLiquidityError}
           type="remove"
+        />
+
+        {/* Instant Loan Progress Dialog */}
+        <InstantLoanProgress
+          isOpen={isInstantLoanProgressOpen}
+          onClose={() => {
+            setIsInstantLoanProgressOpen(false);
+            setInstantLoanSteps([]);
+            setCurrentInstantLoanStep('');
+            setIsInstantLoanCompleted(false);
+            setInstantLoanError('');
+          }}
+          steps={instantLoanSteps}
+          currentStepId={currentInstantLoanStep}
+          isCompleted={isInstantLoanCompleted}
+          error={instantLoanError}
         />
       </div>
     </div>

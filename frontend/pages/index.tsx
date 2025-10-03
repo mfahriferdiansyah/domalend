@@ -136,6 +136,53 @@ const DomaLendPage: NextPage = () => {
         </div>
       )
     },
+
+    {
+      badge: {
+        text: `${stats.totalLoansIssued} Domains Scored`,
+        variant: 'blue' as const
+      },
+      title: 'Domain as a Collateral',
+      description: 'Use your domain names as collateral to secure loans. Domain value assessment and smart contract escrow ensure secure lending backed by digital assets.',
+      illustration: (
+        <div className="w-48 h-32 relative">
+          {/* Domain Collateral Visualization */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4">
+            {/* Domain representation */}
+            <div className="flex items-center justify-center mb-3">
+              <div className="bg-white rounded-lg px-3 py-2 shadow-sm border-2 border-blue-300">
+                <div className="text-xs font-semibold text-blue-700">mydomain.com</div>
+              </div>
+            </div>
+
+            {/* Arrow pointing down */}
+            <div className="flex justify-center mb-2">
+              <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-blue-500"></div>
+            </div>
+
+            {/* Escrow/Lock visualization */}
+            <div className="flex items-center justify-center mb-2">
+              <div className="bg-white rounded-lg p-2 shadow-sm border border-gray-200 relative">
+                <div className="w-8 h-6 bg-blue-200 rounded flex items-center justify-center">
+                  <div className="w-3 h-3 border-2 border-blue-600 rounded-sm"></div>
+                </div>
+                {/* Lock icon */}
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <div className="w-2 h-2 border border-white rounded-sm"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Loan value indicator */}
+            <div className="flex justify-center">
+              <div className="bg-blue-100 rounded px-2 py-1 text-xs font-medium text-blue-700">
+                $5,000 Loan
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    },
     {
       badge: {
         text: `${stats.averageAPY}% Fixed APR`,
@@ -202,55 +249,6 @@ const DomaLendPage: NextPage = () => {
                 {/* Arrow pointing to bank */}
                 <div className="absolute left-0 top-2 w-4 h-0.5 bg-yellow-600"></div>
                 <div className="absolute left-0 top-1.5 w-0 h-0 border-r-2 border-t-1 border-b-1 border-r-yellow-600 border-t-transparent border-b-transparent"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    },
-    {
-      badge: {
-        text: `${stats.totalLoansIssued} Domains Scored`,
-        variant: 'blue' as const
-      },
-      title: 'Verifiable AI Analytics',
-      description: 'Verifiable AI agents analyze domain metrics with cryptographic proofs, ensuring transparent and auditable scoring on Doma Chain.',
-      illustration: (
-        <div className="w-48 h-32 relative">
-          {/* Analytics Dashboard */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4">
-            {/* Header with AI brain icon */}
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center">
-                <div className="w-3 h-3 bg-white rounded-sm"></div>
-              </div>
-              <div className="flex-1 h-2 bg-blue-200 rounded"></div>
-            </div>
-
-            {/* Charts and metrics */}
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div className="bg-white rounded-lg p-2">
-                <div className="h-1 bg-blue-300 rounded mb-1"></div>
-                <div className="h-8 relative">
-                  <svg className="w-full h-full" viewBox="0 0 40 32">
-                    <path d="M2,28 Q8,20 16,22 Q24,24 32,16 Q36,14 38,12" fill="none" stroke="#3B82F6" strokeWidth="2" />
-                  </svg>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg p-2">
-                <div className="h-1 bg-blue-300 rounded mb-1"></div>
-                <div className="space-y-1">
-                  <div className="h-2 bg-blue-500 rounded w-3/4"></div>
-                  <div className="h-2 bg-blue-400 rounded w-1/2"></div>
-                  <div className="h-2 bg-blue-300 rounded w-2/3"></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Verification badge */}
-            <div className="absolute bottom-2 right-2">
-              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                <div className="w-3 h-2 border-l-2 border-b-2 border-white transform rotate-45 -translate-y-0.5"></div>
               </div>
             </div>
           </div>

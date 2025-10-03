@@ -11,7 +11,6 @@ import Link from 'next/link';
 import { Auction } from '@/services/domalend-api';
 import { useAuctions, usePlaceBid } from '@/hooks/useDomaLendApi';
 import { ApiErrorState } from '@/components/common/api-error-boundary';
-import { GridLoadingState } from '@/components/common/api-loading-state';
 import { Pagination } from '@/components/common/pagination';
 
 interface AuctionWithCalculated extends Auction {
@@ -48,8 +47,6 @@ const AuctionsPage: NextPage = () => {
     const decayPerSecond = parseFloat(auction.decayPerSecond);
 
     // Calculate time left based on auction start time and current price decay
-    const startTime = parseInt(auction.auctionStartedAt);
-    const now = Date.now();
 
     // Calculate price decay rate per day
     const priceDecayRate = (decayPerSecond * 86400) / startingPriceNumber * 100;
@@ -139,7 +136,123 @@ const AuctionsPage: NextPage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <GridLoadingState items={6} columns={2} />
+          <div className="animate-pulse">
+            {/* Header */}
+            <div className="mb-8">
+              <div className="h-8 bg-gray-200 rounded mb-2 w-32"></div>
+              <div className="h-4 bg-gray-200 rounded w-64"></div>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="mb-6 flex flex-col gap-4">
+              <div className="h-12 bg-gray-200 rounded-xl w-full"></div>
+              <div className="flex gap-2 justify-end">
+                <div className="h-8 bg-gray-200 rounded w-20"></div>
+                <div className="flex rounded-md border">
+                  <div className="h-8 w-8 bg-gray-200 rounded-l"></div>
+                  <div className="h-8 w-8 bg-gray-200 rounded-r"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Count */}
+            <div className="mb-4 flex justify-between items-center">
+              <div className="h-4 bg-gray-200 rounded w-32"></div>
+              <div className="h-8 bg-gray-200 rounded w-20"></div>
+            </div>
+
+            {/* Auctions Grid */}
+            <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-white rounded-lg shadow p-6">
+                  {/* Card Header */}
+                  <div className="flex justify-between items-start gap-4 mb-6">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="h-6 bg-gray-200 rounded w-32"></div>
+                        <div className="h-5 bg-gray-200 rounded w-16"></div>
+                      </div>
+                      <div className="h-4 bg-gray-200 rounded w-40 mb-1"></div>
+                      <div className="h-3 bg-gray-200 rounded w-36"></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-5 bg-gray-200 rounded w-12 mb-2"></div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                        <div className="h-4 bg-gray-200 rounded w-12"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Content - 3 columns */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Price Information */}
+                    <div className="space-y-4">
+                      <div>
+                        <div className="h-4 bg-gray-200 rounded mb-2 w-24"></div>
+                        <div className="h-8 bg-gray-200 rounded w-20 mb-1"></div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {[...Array(4)].map((_, j) => (
+                          <div key={j} className="flex justify-between">
+                            <div className="h-3 bg-gray-200 rounded w-16"></div>
+                            <div className="h-3 bg-gray-200 rounded w-12"></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Auction Progress */}
+                    <div className="space-y-4">
+                      <div>
+                        <div className="h-4 bg-gray-200 rounded mb-2 w-28"></div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <div className="h-3 bg-gray-200 rounded w-20"></div>
+                            <div className="h-3 bg-gray-200 rounded w-8"></div>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded w-full"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        {[...Array(4)].map((_, j) => (
+                          <div key={j} className="flex">
+                            <div className="h-3 bg-gray-200 rounded w-12 mr-2"></div>
+                            <div className="h-3 bg-gray-200 rounded w-16"></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bidding Section */}
+                    <div className="space-y-4">
+                      <div className="h-4 bg-gray-200 rounded w-16"></div>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="h-10 bg-gray-200 rounded w-full"></div>
+                          <div className="h-3 bg-gray-200 rounded w-32 mt-1"></div>
+                        </div>
+                        <div className="h-10 bg-gray-200 rounded w-full"></div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="h-3 bg-gray-200 rounded w-20"></div>
+                        <div className="h-3 bg-gray-200 rounded w-24"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* View Details Button */}
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="h-10 bg-gray-200 rounded w-full"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -166,18 +279,18 @@ const AuctionsPage: NextPage = () => {
 
 
       {/* Search and Filters */}
-      <div className="mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative flex-1 max-w-md">
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             placeholder="Search auctions..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-12 rounded-xl"
+            className="pl-10 h-12 rounded-xl w-full"
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-end">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -373,20 +486,13 @@ const AuctionsPage: NextPage = () => {
                           </p>
                         </div>
 
-                        <div className="space-y-2">
-                          <Button
-                            className="w-full"
-                            onClick={() => handlePlaceBid(auction.auctionId)}
-                            disabled={!bidAmounts[auction.auctionId] || bidLoading}
-                          >
-                            {bidLoading ? 'Placing Bid...' : 'Place Bid'}
-                          </Button>
-                          <Link href={`/auctions/${auction.auctionId}`}>
-                            <Button variant="outline" className="w-full">
-                              View Details
-                            </Button>
-                          </Link>
-                        </div>
+                        <Button
+                          className="w-full"
+                          onClick={() => handlePlaceBid(auction.auctionId)}
+                          disabled={!bidAmounts[auction.auctionId] || bidLoading}
+                        >
+                          {bidLoading ? 'Placing Bid...' : 'Place Bid'}
+                        </Button>
                       </div>
 
                       <div className="text-xs text-gray-600 space-y-1">
@@ -396,7 +502,7 @@ const AuctionsPage: NextPage = () => {
                     </>
                   ) : auction.status === 'ended' ? (
                     <div className="text-center">
-                      <div className="text-sm text-gray-600 space-y-1 mb-4">
+                      <div className="text-sm text-gray-600 space-y-1">
                         {auction.finalPrice && (
                           <div>Final Price: ${(parseFloat(auction.finalPrice) / 1e18).toFixed(2)}</div>
                         )}
@@ -407,25 +513,24 @@ const AuctionsPage: NextPage = () => {
                           <div>Recovery Rate: {auction.recoveryRate.toFixed(2)}x</div>
                         )}
                       </div>
-                      <Link href={`/auctions/${auction.auctionId}`}>
-                        <Button variant="outline" className="w-full">
-                          View Details
-                        </Button>
-                      </Link>
                     </div>
                   ) : (
                     <div className="text-center">
-                      <div className="text-sm font-semibold text-red-600 mb-4">
+                      <div className="text-sm font-semibold text-red-600">
                         Auction Cancelled
                       </div>
-                      <Link href={`/auctions/${auction.auctionId}`}>
-                        <Button variant="outline" className="w-full">
-                          View Details
-                        </Button>
-                      </Link>
                     </div>
                   )}
                 </div>
+              </div>
+              
+              {/* View Details Button - Always at bottom */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <Link href={`/auctions/${auction.auctionId}`}>
+                  <Button variant="outline" className="w-full">
+                    View Details
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
