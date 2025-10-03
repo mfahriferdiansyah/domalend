@@ -63,12 +63,21 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
     });
     console.log(`✅ [AIOracle] Database insert successful`);
 
-    // 2. Check if auto-submission is enabled
+    // 2. Resolve domain name first (before auto-submission check)
+    let domainName: string;
+    try {
+      domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+      console.log(`✅ [AIOracle] Domain resolved: ${domainName}`);
+    } catch (resolveError) {
+      console.warn(`⚠️ [AIOracle] Failed to resolve domain name for tokenId ${domainTokenId}, using fallback:`, resolveError);
+      domainName = `domain-${domainTokenId}`;
+    }
+
+    // 3. Check if auto-submission is enabled
     const autoSubmitEnabled = process.env.ENABLE_AUTO_SCORE_SUBMISSION === 'true';
 
     let submitResponse;
     let txHash = '';
-    let domainName = '';
     let scoreData = { totalScore: 0, confidence: 0, reasoning: '' };
 
     if (autoSubmitEnabled) {
@@ -88,7 +97,7 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
 
         if (submitResponse.success) {
           txHash = submitResponse.txHash || '';
-          domainName = submitResponse.domainName || `domain-${domainTokenId}`;
+          // Use already resolved domainName (no need to override from backend)
           scoreData = {
             totalScore: submitResponse.score || 0,
             confidence: 90, // Default confidence
@@ -100,14 +109,12 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
         }
       } catch (contractError) {
         console.error(`❌ [AIOracle] Backend scoring pipeline failed:`, contractError);
-        domainName = `domain-${domainTokenId}`; // Fallback domain name
-        // Continue processing to record the failure
+        // Continue processing to record the failure (domainName already resolved)
       }
     } else {
       console.log(`⏭️  [AIOracle] Auto-submission DISABLED - skipping backend call (AVS operator will handle scoring)`);
 
-      // Just record the event, don't trigger backend submission
-      domainName = `domain-${domainTokenId}`;
+      // Just record the event, don't trigger backend submission (domainName already resolved)
       scoreData = {
         totalScore: 0,
         confidence: 0,
@@ -176,27 +183,37 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
  */
 ponder.on("AIOracle:ScoreSubmitted", async ({ event, context }) => {
   const { domainTokenId, score, submittedBy, timestamp } = event.args;
-  
+
   console.log(`✅ [AIOracle] Score submitted: ${domainTokenId} → ${score} by ${submittedBy}`);
 
-  // Update all scoring events for this domain to confirmed
   try {
-    // Use simple database query pattern for Ponder v0.12 with proper null safety
-    // Query scoring events for this domain using new Ponder SQL API
+    // 1. Resolve domain name
+    const domainName = await domainResolver?.resolveDomainName(domainTokenId) || `domain-${domainTokenId}`;
+
+    // 2. Update domain analytics with the latest score
+    await updateDomainAnalytics(
+      context,
+      domainTokenId,
+      domainName,
+      Number(score)
+    );
+
+    // 3. Update all scoring events for this domain to confirmed
     const allScoringEvents = await context.db.sql.select().from(scoringEvent);
     const scoringEvents = allScoringEvents.filter?.((e: any) => e.domainTokenId === domainTokenId.toString()) || [];
 
     for (const event of scoringEvents) {
-      if (event.status === 'submitted' || event.status === 'backend_completed') {
+      if (event.status === 'submitted' || event.status === 'backend_completed' || event.status === 'awaiting_avs_operator') {
         await context.db.update(scoringEvent, { id: event.id })
           .set({
             status: 'completed',
             aiScore: Number(score),
+            domainName: domainName,
             submissionTimestamp: new Date(Number(timestamp) * 1000),
           });
       }
     }
-    console.log(`✅ [AIOracle] Updated ${scoringEvents.length} scoring events to completed`);
+    console.log(`✅ [AIOracle] Updated ${scoringEvents.length} scoring events + domain analytics for ${domainName} (score: ${score})`);
   } catch (error) {
     console.error(`❌ [AIOracle] Failed to update scoring events:`, error);
   }
@@ -425,9 +442,9 @@ ponder.on("AIOracle:PaidScoringRequested", async ({ event, context }) => {
   console.log(`💰 [AIOracle] Paid scoring requested: requestId ${requestId} for domain ${domainTokenId} by ${requester}`);
 
   try {
-    // Insert paid score request record
+    // Insert paid score request record (use eventId as primary key to avoid duplicates on reindex)
     await context.db.insert(paidScoreRequest).values({
-      id: requestId.toString(),
+      id: eventId,  // Use unique event ID instead of requestId to prevent duplicates
       requestId: requestId.toString(),
       domainTokenId: domainTokenId.toString(),
       requesterAddress: requester,
@@ -439,7 +456,7 @@ ponder.on("AIOracle:PaidScoringRequested", async ({ event, context }) => {
       transactionHash: event.transaction.hash,
     });
 
-    console.log(`✅ [AIOracle] Paid scoring request recorded: requestId ${requestId}`);
+    console.log(`✅ [AIOracle] Paid scoring request recorded: requestId ${requestId} (eventId: ${eventId})`);
   } catch (error) {
     console.error(`❌ [AIOracle] Failed to process paid scoring request:`, error);
   }
@@ -469,12 +486,20 @@ ponder.on("AIOracle:PaidScoreSubmitted", async ({ event, context }) => {
     });
 
     // 2. Update paid score request status to completed
-    await context.db.update(paidScoreRequest, { id: requestId.toString() })
-      .set({
-        status: 'completed',
-        rewardRecipient: rewardRecipient,
-        completionTimestamp: submissionTimestamp,
-      });
+    // Find the original request by requestId field (since id is now eventId)
+    const allRequests = await context.db.sql.select().from(paidScoreRequest);
+    const originalRequest = allRequests.find((r: any) => r.requestId === requestId.toString());
+
+    if (originalRequest) {
+      await context.db.update(paidScoreRequest, { id: originalRequest.id })
+        .set({
+          status: 'completed',
+          rewardRecipient: rewardRecipient,
+          completionTimestamp: submissionTimestamp,
+        });
+    } else {
+      console.warn(`⚠️ [AIOracle] Could not find original paid request for requestId ${requestId}`);
+    }
 
     // 3. Update service manager stats
     const existingManager = await context.db.find(serviceManager, { id: serviceManagerAddress });
