@@ -45,12 +45,12 @@ export function ProductCard({ badge, title, description, illustration }: Product
   return (
     <div className="group cursor-pointer">
       {/* Gradient border wrapper that appears on hover */}
-      <div className="rounded-xl p-0.5 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:block hidden transition-all duration-300">
+      <div className="rounded-xl p-0.5 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:block hidden transition-all duration-500">
         <Card className="relative overflow-hidden hover:shadow-lg transition-shadow duration-300 border-none bg-gray-50 shadow-sm rounded-xl">
           <CardContent className="p-3">
             {/* Visual Element with White Card Wrapper */}
             <div className="relative mb-3">
-              <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-300 ${groupHoverBackgroundVariants[badge.variant]} cursor-pointer`}>
+              <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-500 ${groupHoverBackgroundVariants[badge.variant]} cursor-pointer`}>
                 <div className="flex justify-end items-start mb-2">
                   <Badge className={`${badgeVariants[badge.variant]} text-sm font-medium px-3 py-1 flex items-center gap-2 group-hover:bg-white`}>
                     <div className={`w-2 h-2 rounded-full ${dotVariants[badge.variant]}`}></div>
@@ -59,7 +59,7 @@ export function ProductCard({ badge, title, description, illustration }: Product
                 </div>
 
                 <div className="flex justify-center items-center flex-1">
-                  <div className="transition-transform duration-300 group-hover:scale-110">
+                  <div className="transition-transform duration-500 group-hover:scale-110">
                     {illustration}
                   </div>
                 </div>
@@ -85,7 +85,7 @@ export function ProductCard({ badge, title, description, illustration }: Product
         <CardContent className="p-3">
           {/* Visual Element with White Card Wrapper */}
           <div className="relative mb-3">
-            <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-300 ${groupHoverBackgroundVariants[badge.variant]} cursor-pointer`}>
+            <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 h-64 flex flex-col transition-colors duration-500 ${groupHoverBackgroundVariants[badge.variant]} cursor-pointer`}>
               <div className="flex justify-end items-start mb-2">
                 <Badge className={`${badgeVariants[badge.variant]} text-sm font-medium px-3 py-1 flex items-center gap-2 group-hover:bg-white`}>
                   <div className={`w-2 h-2 rounded-full ${dotVariants[badge.variant]}`}></div>
@@ -94,7 +94,7 @@ export function ProductCard({ badge, title, description, illustration }: Product
               </div>
 
               <div className="flex justify-center items-center flex-1">
-                <div className="transition-transform duration-300 group-hover:scale-110">
+                <div className="transition-transform duration-500 group-hover:scale-110">
                   {illustration}
                 </div>
               </div>
