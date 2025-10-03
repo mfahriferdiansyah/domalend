@@ -370,7 +370,7 @@ export const monitorServiceManagerEvents = async () => {
 	);
 
 	const eventTopic = ethers.id(
-		"DomainScoringTaskCreated(uint32,(uint256,uint32,uint8))"
+		"DomainScoringTaskCreated(uint32,(uint256,uint256,uint32,uint8))"
 	);
 	let latestBlock = await provider.getBlockNumber();
 	let isFetching = false;
@@ -401,8 +401,16 @@ export const monitorServiceManagerEvents = async () => {
 					if (!parsedLog) continue;
 
 					const taskIndex = parsedLog.args[0];
-					const task = parsedLog.args[1];
-					const domainTokenId = task[0].toString(); // domainTokenId is first field in DomainTask
+					const taskRaw = parsedLog.args[1];
+					const domainTokenId = taskRaw[0].toString(); // domainTokenId is first field in DomainTask
+
+					// Create mutable copy of task tuple for contract call
+					const task = {
+						domainTokenId: taskRaw[0],
+						requestId: taskRaw[1],
+						taskCreatedBlock: taskRaw[2],
+						taskType: taskRaw[3]
+					};
 
 					if (processedTasks.has(taskIndex.toString())) continue;
 

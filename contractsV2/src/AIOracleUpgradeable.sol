@@ -21,7 +21,7 @@ contract AIOracleUpgradeable is
 
     bytes32 public constant SCORING_SERVICE_ROLE = keccak256("SCORING_SERVICE_ROLE");
     bytes32 public constant SERVICE_MANAGER_ROLE = keccak256("SERVICE_MANAGER_ROLE");
-    string public constant VERSION = "4.3.0";
+    string public constant VERSION = "4.3.2";
 
     address public backendService;
     address public serviceManagerAddress; // AVS ServiceManager address
