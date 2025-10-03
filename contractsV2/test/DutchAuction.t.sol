@@ -3,15 +3,16 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../src/legacy/DutchAuction.sol";
+import "../src/DutchAuctionUpgradeable.sol";
 import "../src/interfaces/IDutchAuction.sol";
 import "./mocks/MockUSDC.sol";
 import "./mocks/MockDoma.sol";
 import "./mocks/MockLoanManager.sol";
 import "./mocks/MockAIOracle.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DutchAuctionTest is Test {
-    DutchAuction public dutchAuction;
+    DutchAuctionUpgradeable public dutchAuction;
     MockUSDC public mockUSDC;
     MockDoma public mockDoma;
     MockLoanManager public mockLoanManager;
@@ -67,14 +68,18 @@ contract DutchAuctionTest is Test {
         mockAIOracle = new MockAIOracle();
         mockLoanManager = new MockLoanManager();
 
-        // Deploy DutchAuction
-        dutchAuction = new DutchAuction(
+        // Deploy DutchAuction with proxy
+        DutchAuctionUpgradeable implementation = new DutchAuctionUpgradeable();
+        bytes memory initData = abi.encodeWithSelector(
+            DutchAuctionUpgradeable.initialize.selector,
             address(mockUSDC),
             address(mockDoma),
             address(mockLoanManager),
             address(mockAIOracle),
             owner
         );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
+        dutchAuction = DutchAuctionUpgradeable(address(proxy));
 
         // Set up domain ownership
         mockDoma.mint(address(mockLoanManager), DOMAIN_TOKEN_ID);

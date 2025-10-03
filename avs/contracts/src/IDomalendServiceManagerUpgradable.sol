@@ -5,13 +5,15 @@ pragma solidity ^0.8.9;
  * @title IDomalendServiceManager
  * @notice Interface for Domalend Service Manager - Domain Scoring Only
  */
-interface IDomalendServiceManager {
+interface IDomalendServiceManagerUpgradable {
     // ========================================
     // === Events ===
     // ========================================
 
     event DomainScoringTaskCreated(uint32 indexed taskIndex, DomainTask task);
-    event DomainScoreSubmitted(uint256 indexed domainTokenId, uint256 score, string ipfsHash, address operator);
+    event DomainScoreSubmitted(
+        uint256 indexed domainTokenId, uint256 score, string ipfsHash, address operator
+    );
 
     // ========================================
     // === Enums & Structs ===
@@ -40,9 +42,14 @@ interface IDomalendServiceManager {
 
     function latestTaskNum() external view returns (uint32);
 
-    function domainTaskHashes(uint32 taskIndex) external view returns (bytes32);
+    function domainTaskHashes(
+        uint32 taskIndex
+    ) external view returns (bytes32);
 
-    function allTaskResponses(address operator, uint32 taskIndex) external view returns (bytes memory);
+    function allTaskResponses(
+        address operator,
+        uint32 taskIndex
+    ) external view returns (bytes memory);
 
     function aiOracleAddress() external view returns (address);
 
@@ -56,7 +63,10 @@ interface IDomalendServiceManager {
      * @param requestId The paid request ID from AIOracle
      * @return The created domain task
      */
-    function createDomainScoringTask(uint256 domainTokenId, uint256 requestId) external returns (DomainTask memory);
+    function createDomainScoringTask(
+        uint256 domainTokenId,
+        uint256 requestId
+    ) external returns (DomainTask memory);
 
     /**
      * @notice Operator responds to a domain scoring task
@@ -79,11 +89,15 @@ interface IDomalendServiceManager {
      * @param domainTokenId The token ID of the domain
      * @return The domain score data
      */
-    function getDomainScoreData(uint256 domainTokenId) external view returns (DomainScoreData memory);
+    function getDomainScoreData(
+        uint256 domainTokenId
+    ) external view returns (DomainScoreData memory);
 
     /**
      * @notice Set the AI Oracle address
      * @param _aiOracleAddress The new AI Oracle address
      */
-    function setAIOracle(address _aiOracleAddress) external;
+    function setAIOracle(
+        address _aiOracleAddress
+    ) external;
 }

@@ -2,10 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/legacy/AIOracle.sol";
+import "../src/AIOracleUpgradeable.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract AIOracleTest is Test {
-    AIOracle public oracle;
+    AIOracleUpgradeable public oracle;
     address public owner;
     address public backendService;
     address public user1;
@@ -35,8 +36,16 @@ contract AIOracleTest is Test {
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
 
-        vm.prank(owner);
-        oracle = new AIOracle(owner);
+        // Deploy implementation
+        AIOracleUpgradeable implementation = new AIOracleUpgradeable();
+
+        // Deploy proxy and initialize
+        bytes memory initData = abi.encodeWithSelector(
+            AIOracleUpgradeable.initialize.selector,
+            owner
+        );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
+        oracle = AIOracleUpgradeable(address(proxy));
 
         vm.prank(owner);
         oracle.setBackendService(backendService);

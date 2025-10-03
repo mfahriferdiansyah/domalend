@@ -14,7 +14,7 @@ import {Quorum} from "@eigenlayer-middleware/src/interfaces/IECDSAStakeRegistryE
 import {UpgradeableProxyLib} from "./UpgradeableProxyLib.sol";
 import {CoreDeploymentLib} from "./CoreDeploymentLib.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {DomalendServiceManager as ServiceManager} from "../../src/DomalendServiceManager.sol";
+import {DomalendServiceManagerUpgradable as ServiceManager} from "../../src/DomalendServiceManagerUpgradable.sol";
 
 library ContractDeploymentLib {
     using stdJson for *;
