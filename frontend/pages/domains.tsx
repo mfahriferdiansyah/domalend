@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SiteIcon } from '@/components/ui/site-icon';
 import { useDomainAnalytics, useSearchDomains, type DomainAnalytics } from '@/hooks/useDomainData';
+import { useDomainsSummary } from '@/hooks/useDomaLendApi';
 import { AlertCircle, ArrowUpRight, Plus, RefreshCw, Search } from 'lucide-react';
 import Link from 'next/link';
 
@@ -30,6 +31,7 @@ const DomainsPage: NextPage = () => {
   // Use Ponder API hooks
   const { data: allDomains, loading: allDomainsLoading, error: allDomainsError, refetch } = useDomainAnalytics();
   const { data: searchResults, loading: searchLoading, error: searchError } = useSearchDomains(searchTerm);
+  const { data: summaryData, loading: summaryLoading } = useDomainsSummary();
 
   // Determine which data source to use - use search only when term is 2+ chars due to API limitation
   const isSearching = searchTerm.trim().length >= 2;
@@ -81,15 +83,73 @@ const DomainsPage: NextPage = () => {
     return 'text-red-600 font-medium';
   };
 
-  if (loading && !isSearching) {
+  if ((loading && !isSearching) || summaryLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Header */}
+            <div className="mb-8 flex justify-between items-center">
+              <div>
+                <div className="h-8 bg-gray-200 rounded mb-2 w-48"></div>
+                <div className="h-4 bg-gray-200 rounded w-40"></div>
+              </div>
+              <div className="h-10 bg-gray-200 rounded w-32"></div>
+            </div>
+
+            {/* Stats Overview - 4 columns */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+              ))}
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-6">
+              <div className="h-12 bg-gray-200 rounded-xl w-full"></div>
+            </div>
+
+            {/* Table Header */}
+            <div className="grid grid-cols-10 gap-4 px-4 py-3 mb-2">
+              <div className="col-span-4 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+            </div>
+
+            {/* Domain Rows */}
+            <div className="space-y-2">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded"></div>
+                <div key={i} className="grid grid-cols-10 gap-4 px-4 py-4 bg-white rounded-xl border border-gray-200">
+                  {/* Domain Column */}
+                  <div className="col-span-4 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-200 rounded"></div>
+                    <div>
+                      <div className="h-4 bg-gray-200 rounded w-32 mb-1"></div>
+                    </div>
+                  </div>
+
+                  {/* Estimated Value */}
+                  <div className="col-span-2 text-right">
+                    <div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div>
+                  </div>
+
+                  {/* Score */}
+                  <div className="col-span-1 text-right">
+                    <div className="h-4 bg-gray-200 rounded w-8 ml-auto"></div>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-2 text-right">
+                    <div className="h-5 bg-gray-200 rounded w-16 ml-auto"></div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="col-span-1 flex items-center gap-2">
+                    <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -130,6 +190,125 @@ const DomainsPage: NextPage = () => {
             </AlertDescription>
           </Alert>
         )}
+
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+            {(summaryData?.totalScoredDomains || 0) > 0 && (
+              <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a855f7" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0.05" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M0,80 Q75,75 150,70 T300,65 L300,120 L0,120 Z"
+                  fill="url(#purpleGradient)"
+                />
+                <path
+                  d="M0,80 Q75,75 150,70 T300,65"
+                  stroke="#a855f7"
+                  strokeWidth="2"
+                  fill="none"
+                />
+              </svg>
+            )}
+            <div className="relative z-10 p-6">
+              <p className="text-sm font-medium text-gray-600">Total Scored</p>
+              <p className="text-2xl font-bold">
+                {(summaryData?.totalScoredDomains || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+            {(summaryData?.averageAiScore || 0) > 0 && (
+              <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0.05" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M0,60 Q75,55 150,65 T300,70 L300,120 L0,120 Z"
+                  fill="url(#greenGradient)"
+                />
+                <path
+                  d="M0,60 Q75,55 150,65 T300,70"
+                  stroke="#22c55e"
+                  strokeWidth="2"
+                  fill="none"
+                />
+              </svg>
+            )}
+            <div className="relative z-10 p-6">
+              <p className="text-sm font-medium text-gray-600">Avg. Score</p>
+              <p className="text-2xl font-bold">
+                {summaryData?.averageAiScore || 0}
+              </p>
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+            {(summaryData?.totalActiveDomains || 0) > 0 && (
+              <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="orangeGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f97316" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#f97316" stopOpacity="0.05" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M0,70 Q75,80 150,72 T300,65 L300,120 L0,120 Z"
+                  fill="url(#orangeGradient)"
+                />
+                <path
+                  d="M0,70 Q75,80 150,72 T300,65"
+                  stroke="#f97316"
+                  strokeWidth="2"
+                  fill="none"
+                />
+              </svg>
+            )}
+            <div className="relative z-10 p-6">
+              <p className="text-sm font-medium text-gray-600">Active Domains</p>
+              <p className="text-2xl font-bold">
+                {(summaryData?.totalActiveDomains || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+            {(summaryData?.totalLiquidatedDomains || 0) > 0 && (
+              <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="redGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity="0.05" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M0,50 Q75,45 150,47 T300,75 L300,120 L0,120 Z"
+                  fill="url(#redGradient)"
+                />
+                <path
+                  d="M0,50 Q75,45 150,47 T300,75"
+                  stroke="#ef4444"
+                  strokeWidth="2"
+                  fill="none"
+                />
+              </svg>
+            )}
+            <div className="relative z-10 p-6">
+              <p className="text-sm font-medium text-gray-600">Liquidated</p>
+              <p className="text-2xl font-bold">
+                {(summaryData?.totalLiquidatedDomains || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Search */}
         <div className="mb-6">

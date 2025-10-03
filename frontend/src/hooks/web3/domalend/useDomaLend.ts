@@ -1,7 +1,7 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig, useAccount } from 'wagmi';
 import { useState, useCallback } from 'react';
 import { parseEther, Address, parseUnits, maxUint256 } from 'viem';
-import { readContract, simulateContract } from '@wagmi/core';
+import { readContract, simulateContract, waitForTransactionReceipt } from '@wagmi/core';
 
 // Contract ABIs - These would be imported from your ABIs folder
 const ERC20_ABI = [
@@ -41,16 +41,63 @@ const ERC20_ABI = [
   }
 ] as const;
 
+// ERC721 ABI for domain approval
+const ERC721_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' }
+    ],
+    outputs: []
+  },
+  {
+    name: 'getApproved',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ name: 'approved', type: 'address' }]
+  },
+  {
+    name: 'setApprovalForAll',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'operator', type: 'address' },
+      { name: 'approved', type: 'bool' }
+    ],
+    outputs: []
+  },
+  {
+    name: 'isApprovedForAll',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'operator', type: 'address' }
+    ],
+    outputs: [{ name: 'approved', type: 'bool' }]
+  }
+] as const;
+
 const SATORU_LENDING_ABI = [
   {
     name: 'requestInstantLoan',
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'domainTokenId', type: 'uint256' },
-      { name: 'requestedAmount', type: 'uint256' },
-      { name: 'term', type: 'uint256' },
-      { name: 'poolId', type: 'uint256' }
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'domainTokenId', type: 'uint256' },
+          { name: 'poolId', type: 'uint256' },
+          { name: 'requestedAmount', type: 'uint256' },
+          { name: 'loanDuration', type: 'uint256' }
+        ]
+      }
     ],
     outputs: [{ name: 'loanId', type: 'uint256' }]
   },
@@ -389,6 +436,7 @@ export function useDomaLend() {
   const { writeContractAsync: writeDutchAuction } = useWriteContract();
   const { writeContractAsync: writeAIOracle } = useWriteContract();
   const { writeContractAsync: writeERC20 } = useWriteContract();
+  const { writeContractAsync: writeERC721 } = useWriteContract();
 
   // Helper function for transaction simulation
   // Helper function to format error messages consistently
@@ -488,24 +536,284 @@ export function useDomaLend() {
   }, [config]);
 
   // Loan Operations
+  // Helper function to check domain approval
+  const checkDomainApproval = useCallback(async (domainTokenId: string): Promise<boolean> => {
+    try {
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESSES.DOMA_PROTOCOL,
+        abi: ERC721_ABI,
+        functionName: 'getApproved',
+        args: [BigInt(domainTokenId)]
+      });
+      
+      console.log('🔍 Domain approval check:', {
+        domainTokenId,
+        approvedAddress: result,
+        loanManagerContract: CONTRACT_ADDRESSES.LOAN_MANAGER,
+        isApproved: result === CONTRACT_ADDRESSES.LOAN_MANAGER
+      });
+      
+      return result === CONTRACT_ADDRESSES.LOAN_MANAGER;
+    } catch (err) {
+      console.error('Error checking domain approval:', err);
+      return false;
+    }
+  }, [config]);
+
+  // Helper function to approve domain
+  const approveDomain = useCallback(async (domainTokenId: string): Promise<TransactionResult> => {
+    try {
+      // Simulate the approval first
+      const simulationConfig = {
+        address: CONTRACT_ADDRESSES.DOMA_PROTOCOL,
+        abi: ERC721_ABI,
+        functionName: 'approve',
+        args: [CONTRACT_ADDRESSES.LOAN_MANAGER, BigInt(domainTokenId)]
+      };
+
+      const simulationResult = await simulateTransaction(simulationConfig);
+      if (!simulationResult.success) {
+        throw new Error(simulationResult.error);
+      }
+
+      const hash = await writeERC721({
+        address: CONTRACT_ADDRESSES.DOMA_PROTOCOL,
+        abi: ERC721_ABI,
+        functionName: 'approve',
+        args: [CONTRACT_ADDRESSES.LOAN_MANAGER, BigInt(domainTokenId)]
+      });
+
+      return { success: true, hash };
+    } catch (err: any) {
+      const message = err.message || 'Failed to approve domain';
+      return { success: false, error: message };
+    }
+  }, [writeERC721, simulateTransaction]);
+
   const requestLoan = useCallback(async (
     domainTokenId: string,
     requestedAmount: string,
     term: number,
-    poolId?: string
-  ) => {
+    poolId?: string,
+    onProgress?: (progress: TransactionProgress) => void
+  ): Promise<TransactionResult> => {
+    console.log('🚀 [requestLoan] Starting instant loan request process', {
+      domainTokenId,
+      requestedAmount,
+      term,
+      poolId,
+      timestamp: new Date().toISOString()
+    });
+
     setIsLoading(true);
     setError(null);
     
     try {
-      const args = [
-        BigInt(domainTokenId),
-        parseUnits(requestedAmount, 6), // Using USDC decimals
-        BigInt(term),
-        poolId ? BigInt(poolId) : BigInt(0)
-      ] as const;
+      let stepIndex = 0;
+      let requiresApproval = false;
+      let approvalHash: string | undefined;
 
-      // Simulate the transaction first
+      console.log('💰 [requestLoan] Parsed loan parameters', {
+        domainTokenId,
+        originalAmount: requestedAmount,
+        termInSeconds: term,
+        poolId: poolId || '0'
+      });
+
+      // Step 1: Check if domain is already approved
+      console.log('🔍 [requestLoan] Step 1: Checking domain approval');
+      
+      onProgress?.({
+        step: 'checking_domain_approval',
+        stepIndex: stepIndex++,
+        totalSteps: 5, // Will adjust based on whether approval is needed
+        message: 'Checking domain approval for collateral use...'
+      });
+
+      const isApproved = await checkDomainApproval(domainTokenId);
+      
+      console.log('🔍 [requestLoan] Domain approval check result', {
+        domainTokenId,
+        isApproved,
+        loanManagerContract: CONTRACT_ADDRESSES.LOAN_MANAGER
+      });
+
+      requiresApproval = !isApproved;
+      
+      console.log('📋 [requestLoan] Approval requirement determined', {
+        requiresApproval,
+        totalSteps: requiresApproval ? 6 : 3
+      });
+      
+      onProgress?.({
+        step: 'checking_domain_approval',
+        stepIndex: 0,
+        totalSteps: requiresApproval ? 6 : 3,
+        message: requiresApproval 
+          ? 'Domain approval required for collateral use.'
+          : 'Domain already approved. Proceeding to loan request.'
+      });
+
+      if (requiresApproval) {
+        console.log('✅ [requestLoan] Step 2: Starting domain approval process');
+        
+        // Step 2: Simulate domain approval
+        onProgress?.({
+          step: 'simulating_domain_approval',
+          stepIndex: stepIndex++,
+          totalSteps: 6,
+          message: 'Simulating domain approval transaction...'
+        });
+        
+        const domainApprovalSimulationConfig = {
+          address: CONTRACT_ADDRESSES.DOMA_PROTOCOL,
+          abi: ERC721_ABI,
+          functionName: 'approve',
+          args: [CONTRACT_ADDRESSES.LOAN_MANAGER, BigInt(domainTokenId)]
+        };
+
+        console.log('🧪 [requestLoan] Simulating domain approval', {
+          config: {
+            address: CONTRACT_ADDRESSES.DOMA_PROTOCOL,
+            functionName: 'approve',
+            spender: CONTRACT_ADDRESSES.LOAN_MANAGER,
+            tokenId: domainTokenId
+          }
+        });
+
+        const domainApprovalSimulationResult = await simulateTransaction(domainApprovalSimulationConfig);
+        
+        console.log('🧪 [requestLoan] Domain approval simulation result', {
+          success: domainApprovalSimulationResult.success,
+          error: domainApprovalSimulationResult.error
+        });
+        
+        if (!domainApprovalSimulationResult.success) {
+          throw new Error(`Domain approval simulation failed: ${domainApprovalSimulationResult.error}`);
+        }
+        
+        // Step 3: Execute domain approval
+        console.log('📝 [requestLoan] Step 3: Executing domain approval');
+        
+        onProgress?.({
+          step: 'approving_domain',
+          stepIndex: stepIndex++,
+          totalSteps: 6,
+          message: 'Please confirm the domain approval in your wallet...'
+        });
+        
+        const approvalResult = await approveDomain(domainTokenId);
+        
+        console.log('📝 [requestLoan] Domain approval execution result', {
+          success: approvalResult.success,
+          hash: approvalResult.hash,
+          error: approvalResult.error
+        });
+        
+        if (!approvalResult.success) {
+          console.error('❌ [requestLoan] Domain approval failed', approvalResult.error);
+          return {
+            success: false,
+            error: approvalResult.error,
+            requiresApproval: true
+          };
+        }
+        
+        approvalHash = approvalResult.hash;
+        
+        console.log('✅ [requestLoan] Domain approval confirmed', {
+          approvalHash,
+          spender: CONTRACT_ADDRESSES.LOAN_MANAGER,
+          tokenId: domainTokenId
+        });
+        
+        onProgress?.({
+          step: 'approving_domain',
+          stepIndex: stepIndex - 1,
+          totalSteps: 6,
+          message: 'Domain approval confirmed! Waiting for confirmation...',
+          txHash: approvalHash
+        });
+
+        // Step 4: Wait for approval confirmation
+        console.log('⏳ [requestLoan] Step 4: Waiting for domain approval confirmation');
+        
+        onProgress?.({
+          step: 'waiting_approval_confirmation',
+          stepIndex: stepIndex++,
+          totalSteps: 6,
+          message: 'Waiting for domain approval to be confirmed on-chain...'
+        });
+        
+        try {
+          const receipt = await waitForTransactionReceipt(config, {
+            hash: approvalHash as `0x${string}`,
+            timeout: 60_000 // 60 seconds timeout
+          });
+          
+          console.log('✅ [requestLoan] Domain approval confirmed on-chain', {
+            txHash: approvalHash,
+            blockNumber: receipt.blockNumber.toString(),
+            status: receipt.status
+          });
+
+          onProgress?.({
+            step: 'waiting_approval_confirmation',
+            stepIndex: stepIndex - 1,
+            totalSteps: 6,
+            message: 'Domain approval confirmed on-chain!',
+            txHash: approvalHash
+          });
+        } catch (waitError) {
+          console.warn('⚠️ [requestLoan] Could not wait for approval confirmation, proceeding anyway', waitError);
+          
+          // Fallback: Add a delay and proceed
+          await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second delay
+          
+          onProgress?.({
+            step: 'waiting_approval_confirmation',
+            stepIndex: stepIndex - 1,
+            totalSteps: 6,
+            message: 'Domain approval transaction sent, proceeding...',
+            txHash: approvalHash
+          });
+        }
+      } else {
+        // Adjust step index if no approval needed
+        stepIndex = 1; // Skip approval steps
+      }
+
+      const totalSteps = requiresApproval ? 6 : 3;
+      
+      // Prepare contract arguments
+      const args = [{
+        domainTokenId: BigInt(domainTokenId),
+        poolId: poolId ? BigInt(poolId) : BigInt(0),
+        requestedAmount: parseUnits(requestedAmount, 6), // Using USDC decimals
+        loanDuration: BigInt(term)
+      }] as const;
+
+      console.log('🏗️ [requestLoan] Prepared contract parameters', {
+        contractParams: {
+          domainTokenId: args[0].domainTokenId.toString(),
+          poolId: args[0].poolId.toString(),
+          requestedAmount: args[0].requestedAmount.toString(),
+          loanDuration: args[0].loanDuration.toString()
+        },
+        totalSteps,
+        currentStepIndex: stepIndex
+      });
+
+      // Step 5 (or 2): Simulate instant loan request
+      console.log('🧪 [requestLoan] Step 5/2: Simulating instant loan request');
+      
+      onProgress?.({
+        step: 'simulating_instant_loan',
+        stepIndex: stepIndex++,
+        totalSteps,
+        message: 'Simulating instant loan request transaction...'
+      });
+
       const simulationConfig = {
         address: CONTRACT_ADDRESSES.SATORU_LENDING,
         abi: SATORU_LENDING_ABI,
@@ -513,10 +821,31 @@ export function useDomaLend() {
         args
       };
 
+      console.log('🧪 [requestLoan] Simulation config', {
+        address: CONTRACT_ADDRESSES.SATORU_LENDING,
+        functionName: 'requestInstantLoan'
+      });
+
       const simulationResult = await simulateTransaction(simulationConfig);
+      
+      console.log('🧪 [requestLoan] Simulation result', {
+        success: simulationResult.success,
+        error: simulationResult.error
+      });
+      
       if (!simulationResult.success) {
-        throw new Error(simulationResult.error);
+        throw new Error(`Instant loan request simulation failed: ${simulationResult.error}`);
       }
+
+      // Step 6 (or 3): Execute instant loan request
+      console.log('🚀 [requestLoan] Step 6/3: Executing instant loan request');
+      
+      onProgress?.({
+        step: 'requesting_instant_loan',
+        stepIndex: stepIndex++,
+        totalSteps,
+        message: 'Please confirm the instant loan request in your wallet...'
+      });
 
       const hash = await writeSatoruLending({
         address: CONTRACT_ADDRESSES.SATORU_LENDING,
@@ -525,15 +854,61 @@ export function useDomaLend() {
         args
       });
       
-      return { success: true, hash };
+      console.log('🚀 [requestLoan] Execution result', {
+        success: true,
+        hash,
+        contractAddress: CONTRACT_ADDRESSES.SATORU_LENDING
+      });
+
+      // Final success
+      onProgress?.({
+        step: 'requesting_instant_loan',
+        stepIndex: stepIndex - 1,
+        totalSteps,
+        message: 'Instant loan request completed successfully!',
+        txHash: hash
+      });
+
+      const finalResult = {
+        success: true,
+        hash,
+        approvalHash,
+        requiresApproval,
+        message: requiresApproval 
+          ? 'Domain approved and instant loan requested successfully!'
+          : 'Instant loan requested successfully!'
+      };
+
+      console.log('🎉 [requestLoan] Instant loan request completed successfully', {
+        result: finalResult,
+        totalSteps: totalSteps,
+        timestamp: new Date().toISOString()
+      });
+
+      return finalResult;
     } catch (err: any) {
-      const message = err.message || 'Failed to request loan';
+      const message = formatErrorMessage(err, 'Instant loan request');
+      
+      console.error('❌ [requestLoan] Instant loan request failed', {
+        error: message,
+        originalError: err,
+        domainTokenId,
+        requestedAmount,
+        term,
+        poolId,
+        timestamp: new Date().toISOString(),
+        stack: err.stack
+      });
+      
       setError(message);
       return { success: false, error: message };
     } finally {
       setIsLoading(false);
+      console.log('🏁 [requestLoan] Instant loan request process ended', {
+        timestamp: new Date().toISOString()
+      });
     }
-  }, [writeSatoruLending, simulateTransaction]);
+  }, [writeSatoruLending, simulateTransaction, checkDomainApproval, approveDomain, formatErrorMessage]);
 
   const repayLoan = useCallback(async (
     loanId: string, 
@@ -689,7 +1064,7 @@ export function useDomaLend() {
         }
       }
 
-      const totalSteps = requiresApproval ? 5 : 3;
+      const totalSteps = requiresApproval ? 6 : 3;
       const args = [BigInt(loanId), amountBigInt] as const;
 
       console.log('🏗️ [repayLoan] Prepared contract parameters', {
@@ -961,7 +1336,7 @@ export function useDomaLend() {
         }
       }
 
-      const totalSteps = requiresApproval ? 5 : 3;
+      const totalSteps = requiresApproval ? 6 : 3;
       
       const contractParams = {
         initialLiquidity: initialLiquidityBigInt,
@@ -1256,7 +1631,7 @@ export function useDomaLend() {
         }
       }
 
-      const totalSteps = requiresApproval ? 5 : 3;
+      const totalSteps = requiresApproval ? 6 : 3;
       const args = [BigInt(poolId), amountBigInt] as const;
 
       console.log('🏗️ [addLiquidity] Prepared contract parameters', {
@@ -1929,7 +2304,7 @@ export function useDomaLend() {
         }
       }
 
-      const totalSteps = requiresApproval ? 5 : 3;
+      const totalSteps = requiresApproval ? 6 : 3;
       const args = [BigInt(requestId), amountBigInt] as const;
 
       console.log('🏗️ [fundLoanRequest] Prepared contract parameters', {

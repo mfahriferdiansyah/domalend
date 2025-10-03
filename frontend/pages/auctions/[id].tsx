@@ -140,9 +140,21 @@ const AuctionDetailPage: NextPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{auction.domainName}</h1>
             <p className="text-gray-600">Auction #{auction.auctionId}</p>
           </div>
-          <Badge className={getStatusColor(auction.status)}>
-            {auction.status.charAt(0).toUpperCase() + auction.status.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge className={getStatusColor(auction.status)}>
+              {auction.status.charAt(0).toUpperCase() + auction.status.slice(1)}
+            </Badge>
+            <Link href={`/domain/${auction.domainTokenId}`}>
+              <Button className="bg-black text-white hover:bg-gray-800 flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15,3 21,3 21,9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                View Detail
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -390,29 +402,6 @@ const AuctionDetailPage: NextPage = () => {
             </CardContent>
           </Card>
 
-          {/* Domain Links */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Related Links</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Link
-                  href={`/domain/${auction.domainTokenId}`}
-                  className="block text-blue-600 hover:underline text-sm"
-                >
-                  View Domain Details
-                </Link>
-                <Link
-                  href={auction.domain.metadata.externalUrl}
-                  target="_blank"
-                  className="block text-blue-600 hover:underline text-sm"
-                >
-                  Domain Dashboard
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
       </div>

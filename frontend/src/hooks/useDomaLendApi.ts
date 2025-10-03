@@ -334,3 +334,22 @@ export function useUserScoredDomains(address: string | undefined) {
 
   return useApi(apiCall, { immediate: !!address });
 }
+
+export function useDomainsSummary() {
+  const apiCall = useCallback(async () => {
+    const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'https://backend-doma.kadzu.dev';
+    const response = await fetch(`${backendApiUrl}/domains/summary`, {
+      headers: {
+        'accept': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch domains summary: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }, []);
+
+  return useApi(apiCall, { immediate: true });
+}
