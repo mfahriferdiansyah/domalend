@@ -297,11 +297,25 @@ const DUTCH_AUCTION_ABI = [
 
 const AI_ORACLE_ABI = [
   {
-    name: 'requestScoring',
+    name: 'paidScoreRequest',
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'domainTokenId', type: 'uint256' }],
-    outputs: []
+    outputs: [{ name: 'requestId', type: 'uint256' }]
+  },
+  {
+    name: 'paymentToken',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: 'token', type: 'address' }]
+  },
+  {
+    name: 'paidScoringFee',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: 'fee', type: 'uint256' }]
   },
   {
     name: 'getDomainScore',
@@ -430,6 +444,7 @@ export function useDomaLend() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const config = useConfig();
+  const { address } = useAccount();
   
   const { writeContractAsync: writeSatoruLending } = useWriteContract();
   const { writeContractAsync: writeLoanManager } = useWriteContract();
@@ -1828,18 +1843,91 @@ export function useDomaLend() {
   }, [writeLoanManager, simulateTransaction]);
 
   // AI Oracle Operations
-  const requestDomainScoring = useCallback(async (domainTokenId: string) => {
+  const requestDomainScoring = useCallback(async (
+    domainTokenId: string,
+    onProgress?: (progress: TransactionProgress) => void
+  ): Promise<TransactionResult & { requestId?: string }> => {
     setIsLoading(true);
     setError(null);
     
     try {
       const args = [BigInt(domainTokenId)] as const;
+      let stepIndex = 0;
+      let requiresApproval = false;
+      let approvalHash: string | undefined;
 
-      // Simulate the transaction first
+      if (!address) {
+        throw new Error('Wallet not connected');
+      }
+
+      // Step 1: Get payment token and fee from contract
+      const [paymentTokenAddress, paidScoringFee] = await Promise.all([
+        readContract(config, {
+          address: CONTRACT_ADDRESSES.AI_ORACLE,
+          abi: AI_ORACLE_ABI,
+          functionName: 'paymentToken'
+        }),
+        readContract(config, {
+          address: CONTRACT_ADDRESSES.AI_ORACLE,
+          abi: AI_ORACLE_ABI,
+          functionName: 'paidScoringFee'
+        })
+      ]);
+
+      const feeBigInt = paidScoringFee as bigint;
+
+      // Step 2: Check current allowance
+      onProgress?.({
+        step: 'checking_allowance',
+        stepIndex: stepIndex++,
+        totalSteps: 3, // Will adjust based on whether approval is needed
+        message: 'Checking payment token allowance...'
+      });
+
+      const currentAllowance = await readContract(config, {
+        address: paymentTokenAddress as Address,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [address, CONTRACT_ADDRESSES.AI_ORACLE]
+      });
+
+      requiresApproval = (currentAllowance as bigint) < feeBigInt;
+
+      if (requiresApproval) {
+        onProgress?.({
+          step: 'approving_payment',
+          stepIndex: stepIndex++,
+          totalSteps: 4,
+          message: 'Approving payment token...'
+        });
+
+        // Approve payment token
+        const approvalResult = await writeERC20({
+          address: paymentTokenAddress as Address,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [CONTRACT_ADDRESSES.AI_ORACLE, feeBigInt]
+        });
+
+        if (!approvalResult) {
+          throw new Error('Failed to approve payment token');
+        }
+
+        approvalHash = approvalResult;
+      }
+
+      // Step 3: Simulate the scoring request
+      onProgress?.({
+        step: 'simulating_request',
+        stepIndex: stepIndex++,
+        totalSteps: requiresApproval ? 4 : 3,
+        message: 'Simulating scoring request...'
+      });
+
       const simulationConfig = {
         address: CONTRACT_ADDRESSES.AI_ORACLE,
         abi: AI_ORACLE_ABI,
-        functionName: 'requestScoring',
+        functionName: 'paidScoreRequest',
         args
       };
 
@@ -1848,14 +1936,47 @@ export function useDomaLend() {
         throw new Error(simulationResult.error);
       }
 
+      // Step 4: Execute the scoring request
+      onProgress?.({
+        step: 'requesting_scoring',
+        stepIndex: stepIndex++,
+        totalSteps: requiresApproval ? 4 : 3,
+        message: 'Requesting domain scoring...'
+      });
+
       const hash = await writeAIOracle({
         address: CONTRACT_ADDRESSES.AI_ORACLE,
         abi: AI_ORACLE_ABI,
-        functionName: 'requestScoring',
+        functionName: 'paidScoreRequest',
         args
       });
+
+      // Wait for transaction receipt to get the requestId from events
+      const receipt = await waitForTransactionReceipt(config, { hash });
       
-      return { success: true, hash };
+      // Parse the PaidScoringRequested event to get requestId
+      let requestId: string | undefined;
+      for (const log of receipt.logs) {
+        try {
+          // This is a simplified event parsing - you might want to use a proper ABI decoder
+          if (log.topics[0] && log.address.toLowerCase() === CONTRACT_ADDRESSES.AI_ORACLE.toLowerCase()) {
+            // The requestId should be in the event data
+            // For now, we'll just indicate success without the specific requestId
+            requestId = 'pending'; // Could be extracted from event logs if needed
+            break;
+          }
+        } catch {
+          // Continue if log parsing fails
+        }
+      }
+      
+      return { 
+        success: true, 
+        hash, 
+        requestId,
+        approvalHash,
+        requiresApproval
+      };
     } catch (err: any) {
       const message = err.message || 'Failed to request domain scoring';
       setError(message);
@@ -1863,7 +1984,7 @@ export function useDomaLend() {
     } finally {
       setIsLoading(false);
     }
-  }, [writeAIOracle, simulateTransaction]);
+  }, [writeAIOracle, writeERC20, simulateTransaction, config, address]);
 
   // Additional Pool Operations
   const removeLiquidity = useCallback(async (

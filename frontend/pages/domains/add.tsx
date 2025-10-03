@@ -1,22 +1,18 @@
+import { ApiErrorState } from '@/components/common/api-error-boundary';
+import { GridLoadingState } from '@/components/common/api-loading-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@heroui/react';
-import { AlertCircle, ArrowLeft, Globe, Info, Loader2, CheckCircle, ExternalLink } from 'lucide-react';
+import { TransactionProgress as TransactionProgressComponent, TransactionStep, transactionSteps } from '@/components/ui/transaction-progress';
+import { useUserDomains } from '@/hooks/useDomaLendApi';
+import { TransactionProgress, useDomainScore, useDomaLend, useUSDCAllowance, useUSDCBalance } from '@/hooks/web3/domalend/useDomaLend';
+import { AlertCircle, ArrowLeft, CheckCircle, Globe, Info, Loader2 } from 'lucide-react';
 import { NextPage } from 'next';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { useAccount } from 'wagmi';
-import { useUserDomains } from '@/hooks/useDomaLendApi';
-import { ApiErrorState } from '@/components/common/api-error-boundary';
-import { GridLoadingState } from '@/components/common/api-loading-state';
-import { useDomaLend, useUSDCAllowance, useUSDCBalance, TransactionProgress, useDomainScore } from '@/hooks/web3/domalend/useDomaLend';
-import { TransactionStep, transactionSteps, TransactionProgress as TransactionProgressComponent } from '@/components/ui/transaction-progress';
-import { formatUSDC } from '@/utils/formatting';
 
 interface DomainNFT {
   tokenId: string;

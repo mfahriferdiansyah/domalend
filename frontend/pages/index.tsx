@@ -28,7 +28,7 @@ const DomaLendPage: NextPage = () => {
     const mockStats: MarketStats = {
       totalValueLocked: 2850000,
       totalLoansIssued: 1250,
-      averageAPY: 14.2,
+      averageAPY: 10,
       totalActiveLoans: 89
     };
 
@@ -392,6 +392,11 @@ const DomaLendPage: NextPage = () => {
             <div className="flex items-center justify-center">
               <a href="https://reclaimprotocol.org/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
                 <img src="/icons/stack-recclaim-protocol.svg" alt="Reclaim Protocol" className="h-12 w-auto filter grayscale brightness-50 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
+              </a>
+            </div>
+            <div className="flex items-center justify-center">
+              <a href="https://pinata.cloud/" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+                <img src="/icons/stack-pinata.svg" alt="Pinata" className="h-12 w-auto filter grayscale brightness-50 opacity-70 hover:opacity-100 hover:filter-none hover:brightness-100 transition-all duration-300" />
               </a>
             </div>
           </div>
