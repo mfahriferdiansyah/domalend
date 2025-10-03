@@ -781,7 +781,7 @@ const PoolDetailPage: NextPage = () => {
                             <AlertDescription className="text-amber-800">
                               {userOwnedDomains.length === 0 ? (
                                 <>
-                                  You don't own any domains yet. 
+                                  You don&apos;t own any domains yet. 
                                   <Link href="/domains" className="underline hover:text-amber-900 ml-1">
                                     View available domains
                                   </Link>
