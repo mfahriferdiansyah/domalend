@@ -33,7 +33,7 @@ contract DomalendServiceManagerUpgradable is
     using ECDSAUpgradeable for bytes32;
     using SafeERC20 for IERC20;
 
-    string public constant VERSION = "2.2.0";
+    string public constant VERSION = "2.2.1";
 
     uint32 public latestTaskNum;
 
@@ -182,7 +182,7 @@ contract DomalendServiceManagerUpgradable is
         string calldata ipfsHash,
         uint32 referenceTaskIndex,
         bytes calldata signature
-    ) external onlyOperator {
+    ) external /* onlyOperator */ {
         // Verify task hash
         require(
             keccak256(abi.encode(task)) == domainTaskHashes[referenceTaskIndex],

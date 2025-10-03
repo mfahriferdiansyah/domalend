@@ -172,8 +172,8 @@ Analyze this domain's business intelligence, brand value, and commercial potenti
 			},
 			responseMatches: [
 				{
-					type: "contains" as const,
-					value: "totalScore",
+					type: "regex" as const,
+					value: "(?<response>.*)", // Capture entire response body
 				},
 			],
 		};
@@ -195,19 +195,61 @@ Analyze this domain's business intelligence, brand value, and commercial potenti
 
 		console.log("zkFetch proof generated successfully!");
 
-		// Extract response from proof context
+		// Debug: Log full proof structure
+		console.log("\n🔍 DEBUG: Proof structure keys:", Object.keys(proof));
+		console.log("🔍 DEBUG: claimData keys:", Object.keys(proof.claimData || {}));
+
+		// Extract response from proof context (following reclaimZkFetch.ts pattern)
 		const context = JSON.parse(proof.claimData.context);
-		const responseText = context.extractedParameters?.response || "{}";
+		console.log("🔍 DEBUG: Context keys:", Object.keys(context));
+		console.log("🔍 DEBUG: extractedParameters keys:", Object.keys(context.extractedParameters || {}));
+
+		// Extract the full response body from extractedParameters
+		const rawHttpResponse = context.extractedParameters?.response || "{}";
+
+		console.log("🔍 DEBUG: Raw HTTP response length:", rawHttpResponse.length);
+
+		// Parse HTTP response to extract JSON body
+		// zkFetch captures the entire HTTP response including headers and chunked encoding
+		// We need to extract just the JSON body
+		let responseText;
+		try {
+			// Split by double newline to separate headers from body
+			const parts = rawHttpResponse.split(/\r?\n\r?\n/);
+
+			// The body is after the headers
+			// For chunked encoding, the body starts with chunk size (in hex), then the actual content
+			const bodyPart = parts.slice(1).join("\n\n");
+
+			// Extract JSON from the response body
+			// Look for the OpenAI API response format: {"id":"chatcmpl-...
+			const jsonMatch = bodyPart.match(/\{[\s\S]*"id"[\s\S]*"choices"[\s\S]*\}/);
+
+			if (!jsonMatch) {
+				throw new Error("Could not find JSON in HTTP response body");
+			}
+
+			responseText = jsonMatch[0];
+			console.log("🔍 DEBUG: Extracted JSON length:", responseText.length);
+		} catch (e) {
+			console.error("Failed to extract JSON from HTTP response:", e);
+			console.error("Raw HTTP response was:", rawHttpResponse);
+			throw new Error("Failed to parse HTTP response from zkFetch");
+		}
 
 		// Parse OpenAI response
 		let parsedResponse;
 		try {
 			// OpenAI returns the response in a specific format
 			const openaiResponse = JSON.parse(responseText);
+			console.log("🔍 DEBUG: OpenAI response ID:", openaiResponse.id);
 			const content = openaiResponse.choices?.[0]?.message?.content || "{}";
+			console.log("🔍 DEBUG: Extracted content:", content);
 			parsedResponse = JSON.parse(content);
+			console.log("🔍 DEBUG: Final parsed response - score:", parsedResponse.totalScore);
 		} catch (e) {
-			console.error("Failed to parse OpenAI response from zkFetch:", e);
+			console.error("Failed to parse OpenAI JSON response:", e);
+			console.error("responseText was:", responseText);
 			throw new Error("Invalid OpenAI response format");
 		}
 
