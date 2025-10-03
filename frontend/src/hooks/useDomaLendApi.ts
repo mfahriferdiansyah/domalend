@@ -87,7 +87,6 @@ export function usePools(params?: {
     const response = await domaLendAPI.getPools({
       page,
       limit,
-      minAiScore: 50,
       status: 'active',
       sortBy: 'createdAt',
       order: 'desc',
@@ -120,6 +119,14 @@ export function usePool(poolId: string | undefined, includeLoans = true, include
   }, [poolId, includeLoans, includeHistory]);
 
   return useApi(apiCall, { immediate: !!poolId });
+}
+
+export function usePoolsSummary() {
+  const apiCall = useCallback(async () => {
+    return domaLendAPI.getPoolsSummary();
+  }, []);
+
+  return useApi(apiCall, { immediate: true });
 }
 
 export function useCreatePool() {
@@ -287,11 +294,12 @@ export function useMarketStats() {
 }
 
 // External API hooks
-export function useUserDomains(address: string | undefined) {
+export function useUserDomains(address: string | undefined, includeAnalytics: boolean = true) {
   const apiCall = useCallback(async () => {
     if (!address) throw new Error('Address is required');
     const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'https://backend-doma.kadzu.dev';
-    const response = await fetch(`${backendApiUrl}/domains/address/${address}`, {
+    const url = `${backendApiUrl}/domains/address/${address}${includeAnalytics ? '?includeAnalytics=true' : '?includeAnalytics=false'}`;
+    const response = await fetch(url, {
       headers: {
         'accept': 'application/json'
       }
@@ -302,7 +310,7 @@ export function useUserDomains(address: string | undefined) {
     }
     
     return response.json();
-  }, [address]);
+  }, [address, includeAnalytics]);
 
   return useApi(apiCall, { immediate: !!address });
 }

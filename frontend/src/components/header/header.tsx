@@ -2,9 +2,9 @@ import { cn } from "@/lib/utils";
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import ButtonConnectWallet from "../button-connect-wallet.tsx/button-connect-wallet";
 import { Button } from "../ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
-import ButtonConnectWallet from "../button-connect-wallet.tsx/button-connect-wallet";
 
 interface DomaLendHeaderProps {
   onTogglePanel?: () => void;
@@ -16,8 +16,8 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
 
   const navigationLinks = [
     { destination: "/dashboard", label: "Dashboard" },
+    { destination: "/explore", label: "Explore" },
     { destination: "/domains", label: "Domains" },
-    { destination: "/pools", label: "Pools" },
     { destination: "/auctions", label: "Auctions" },
   ];
 
@@ -26,7 +26,7 @@ export default function DomaLendHeader({ onTogglePanel }: DomaLendHeaderProps) {
       <nav className="max-w-7xl mx-auto px-6 py-4 flex flex-row md:grid md:grid-cols-3 md:items-center">
         {/* Left Column - Logo */}
         <div className="flex flex-row gap-4 items-center">
-          <Link href="/domalend" className="flex flex-row items-center gap-3">
+          <Link href="/" className="flex flex-row items-center gap-3">
             <div className="h-14 w-14 bg-white rounded-lg flex items-center justify-center">
               <img src="/icons/domalend-blue.png" alt="DomaLend Logo" className="w-full h-full object-contain" />
             </div>

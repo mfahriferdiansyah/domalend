@@ -297,30 +297,108 @@ export class DomainController {
 
   @Get('address/:address')
   @ApiOperation({
-    summary: 'Get all domain NFTs owned by an address',
-    description: 'Retrieve all domain NFTs owned by a specific Ethereum address. This endpoint uses the Doma Explorer API for efficient data retrieval with full metadata.'
+    summary: 'Get all domain NFTs owned by an address with analytics',
+    description: 'Retrieve all domain NFTs owned by a specific Ethereum address with enhanced analytics from the indexer including AI scores, loan history, and domain performance metrics.'
   })
   @ApiParam({
     name: 'address',
     description: 'Ethereum wallet address (42-character hex string starting with 0x)',
     example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53'
   })
+  @ApiQuery({
+    name: 'includeAnalytics',
+    description: 'Whether to include domain analytics from indexer',
+    required: false,
+    type: Boolean,
+    example: true
+  })
   @ApiResponse({
     status: 200,
-    description: 'NFT balance and list retrieved successfully from Doma Explorer API',
+    description: 'NFT balance and list with analytics retrieved successfully',
     type: AddressNFTBalanceDto
   })
   @ApiResponse({ status: 400, description: 'Invalid Ethereum address format' })
   @ApiResponse({ status: 500, description: 'Explorer API unavailable or blockchain connection failed' })
-  async getNFTBalanceByAddress(@Param('address') address: string): Promise<AddressNFTBalanceDto> {
-    this.logger.log(`Getting NFT balance for address: ${address}`);
+  async getNFTBalanceByAddress(
+    @Param('address') address: string,
+    @Query('includeAnalytics') includeAnalytics?: string
+  ): Promise<AddressNFTBalanceDto> {
+    this.logger.log(`Getting NFT balance for address: ${address}, includeAnalytics: ${includeAnalytics}`);
 
     if (!ethers.isAddress(address)) {
       throw new HttpException('Invalid Ethereum address', HttpStatus.BAD_REQUEST);
     }
 
+    const shouldIncludeAnalytics = includeAnalytics !== 'false'; // Default to true
+
     try {
-      return await this.domaNftService.getNFTBalanceForAddress(address);
+      // Get basic NFT data from Doma Explorer
+      const basicNFTData = await this.domaNftService.getNFTBalanceForAddress(address);
+      
+      if (!shouldIncludeAnalytics || basicNFTData.ownedNFTs.length === 0) {
+        return basicNFTData;
+      }
+
+      // Extract token IDs for analytics lookup
+      const tokenIds = basicNFTData.ownedNFTs.map(nft => nft.tokenId);
+      
+      this.logger.log(`Fetching analytics for ${tokenIds.length} domains: ${tokenIds.join(', ')}`);
+
+      // Query analytics data from indexer for all owned domains
+      let analyticsData: any = null;
+      try {
+        analyticsData = await this.indexerService.queryDomains({
+          where: { domainTokenId_in: tokenIds },
+          limit: tokenIds.length,
+          orderBy: 'latestAiScore',
+          orderDirection: 'desc'
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch analytics for domains:`, error.message);
+        // Continue without analytics if indexer fails
+        return basicNFTData;
+      }
+
+      // Create a map of analytics by token ID for quick lookup
+      const analyticsMap = new Map();
+      if (analyticsData?.domainAnalyticss?.items) {
+        for (const analytics of analyticsData.domainAnalyticss.items) {
+          analyticsMap.set(analytics.domainTokenId, analytics);
+        }
+      }
+
+      // Enhance NFTs with analytics data
+      const enhancedNFTs = basicNFTData.ownedNFTs.map(nft => {
+        const analytics = analyticsMap.get(nft.tokenId);
+        
+        if (analytics) {
+          // Add analytics as additional properties to the NFT
+          return {
+            ...nft,
+            analytics: {
+              domainTokenId: analytics.domainTokenId,
+              domainName: analytics.domainName,
+              latestAiScore: analytics.latestAiScore,
+              totalScoringRequests: analytics.totalScoringRequests,
+              totalLoansCreated: analytics.totalLoansCreated,
+              totalLoanVolume: analytics.totalLoanVolume,
+              hasBeenLiquidated: analytics.hasBeenLiquidated,
+              firstScoreTimestamp: analytics.firstScoreTimestamp,
+              lastActivityTimestamp: analytics.lastActivityTimestamp
+            }
+          };
+        }
+        
+        return nft;
+      });
+
+      // Update the response with enhanced data
+      return {
+        ...basicNFTData,
+        ownedNFTs: enhancedNFTs,
+        note: `Address owns ${basicNFTData.balance} NFT(s), showing ${enhancedNFTs.length} with metadata${shouldIncludeAnalytics ? ' and analytics' : ''}`
+      };
+
     } catch (error) {
       this.logger.error(`Error getting NFT balance for address ${address}:`, error.message);
       throw new HttpException(

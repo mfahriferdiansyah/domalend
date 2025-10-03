@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { NextPage } from 'next';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Clock, TrendingDown, AlertCircle, DollarSign, Calendar, User, Hash } from 'lucide-react';
-import Link from 'next/link';
-import { domaLendAPI, AuctionDetail, AuctionEvent } from '@/services/domalend-api';
 import { useDomaLend } from '@/hooks/web3/domalend/useDomaLend';
+import { AuctionDetail, domaLendAPI } from '@/services/domalend-api';
+import { AlertCircle, ArrowLeft, Calendar, Clock, Hash, TrendingDown, User } from 'lucide-react';
+import { NextPage } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 const AuctionDetailPage: NextPage = () => {
@@ -18,7 +18,7 @@ const AuctionDetailPage: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bidAmount, setBidAmount] = useState('');
-  
+
   const { placeBid, isLoading: isBidLoading, error: bidError } = useDomaLend();
 
   useEffect(() => {
@@ -31,7 +31,7 @@ const AuctionDetailPage: NextPage = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await domaLendAPI.getAuction(auctionId);
       setAuction(response.auction);
     } catch (err) {
@@ -50,7 +50,7 @@ const AuctionDetailPage: NextPage = () => {
 
     try {
       const result = await placeBid(auction.auctionId, bidAmount);
-      
+
       if (result.success) {
         toast.success(`Bid placed successfully! Transaction hash: ${result.hash}`);
         setBidAmount('');
@@ -71,7 +71,7 @@ const AuctionDetailPage: NextPage = () => {
       const hours = Math.floor(duration / (1000 * 60 * 60));
       return `${hours}h`;
     }
-    
+
     const elapsed = Date.now() - parseInt(startTime);
     const hours = Math.floor(elapsed / (1000 * 60 * 60));
     return `${hours}h elapsed`;
@@ -97,11 +97,13 @@ const AuctionDetailPage: NextPage = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded mb-4"></div>
           <div className="h-64 bg-gray-200 rounded mb-4"></div>
           <div className="h-48 bg-gray-200 rounded"></div>
+        </div>
         </div>
       </div>
     );
@@ -109,10 +111,12 @@ const AuctionDetailPage: NextPage = () => {
 
   if (error || !auction) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="text-center py-12">
           <p className="text-red-500 mb-4">{error || 'Auction not found'}</p>
           <Button onClick={() => router.back()}>Go Back</Button>
+        </div>
         </div>
       </div>
     );
@@ -123,7 +127,8 @@ const AuctionDetailPage: NextPage = () => {
   const finalPrice = auction.finalPrice ? parseFloat(auction.finalPrice) / 1e6 : null;
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="mb-8">
         <Button variant="ghost" onClick={() => router.back()} className="mb-4">
@@ -392,15 +397,15 @@ const AuctionDetailPage: NextPage = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Link 
-                  href={`/domain/${auction.domainTokenId}`} 
+                <Link
+                  href={`/domain/${auction.domainTokenId}`}
                   className="block text-blue-600 hover:underline text-sm"
                 >
                   View Domain Details
                 </Link>
-                <Link 
-                  href={auction.domain.metadata.externalUrl} 
-                  target="_blank" 
+                <Link
+                  href={auction.domain.metadata.externalUrl}
+                  target="_blank"
                   className="block text-blue-600 hover:underline text-sm"
                 >
                   Domain Dashboard
@@ -409,6 +414,7 @@ const AuctionDetailPage: NextPage = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
       </div>
     </div>
   );

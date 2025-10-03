@@ -75,19 +75,19 @@ type SolidColorConfig = BaseColorConfig & {
 type ColorConfig = GradientColorConfig | SolidColorConfig
 
 const defaultGradientColors: GradientColorConfig = {
-  fromColor: "from-blue-600",
-  toColor: "to-blue-700",
-  hoverFromColor: "hover:from-blue-500",
-  hoverToColor: "hover:to-blue-600",
-  shadowColor: "shadow-[0_0_15px_rgba(59,130,246,0.15)]",
+  fromColor: "from-black",
+  toColor: "to-gray-800",
+  hoverFromColor: "hover:from-gray-800",
+  hoverToColor: "hover:to-black",
+  shadowColor: "shadow-[0_0_15px_rgba(0,0,0,0.15)]",
   textColor: "text-white",
   mode: "gradient",
 }
 
 const defaultSolidColors: SolidColorConfig = {
-  backgroundColor: "bg-blue-500",
-  hoverBackgroundColor: "hover:bg-blue-600",
-  shadowColor: "shadow-[0_0_15px_rgba(59,130,246,0.15)]",
+  backgroundColor: "bg-black",
+  hoverBackgroundColor: "hover:bg-gray-800",
+  shadowColor: "shadow-[0_0_15px_rgba(0,0,0,0.15)]",
   textColor: "text-white",
   mode: "solid",
 }
@@ -111,7 +111,7 @@ export const ConnectButtonWalletComponents = ({
 }) => {
   const getButtonClassName = (colorConfig: ColorConfig) => {
     const { shadowColor, textColor } = colorConfig
-    const commonClasses = `${textColor} ${shadowColor} hover:shadow-[0_0_20px_rgba(59,130,246,0.25)] transition-all rounded-lg text-sm sm:text-xs font-bold`
+    const commonClasses = `${textColor} ${shadowColor} hover:shadow-[0_0_20px_rgba(0,0,0,0.25)] transition-all rounded-lg text-sm sm:text-xs font-bold`
 
     if (colorConfig.mode === "gradient") {
       const { fromColor, toColor, hoverFromColor, hoverToColor } = colorConfig

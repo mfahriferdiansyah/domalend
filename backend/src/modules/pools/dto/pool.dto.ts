@@ -1,18 +1,105 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional, IsString, IsNumber, IsEnum, IsBoolean } from 'class-validator';
 
+export class PoolHistoryEventDto {
+  @ApiProperty({
+    description: 'Pool history event ID',
+    example: '0xbd6e65eaa1fdb2e65a8fedd470caf3171c06ac83801ab18faa6228e9f9c2ec80-22',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Pool ID',
+    example: '1',
+  })
+  poolId: string;
+
+  @ApiProperty({
+    description: 'Event type',
+    example: 'created',
+    enum: ['created', 'liquidity_added', 'liquidity_removed', 'updated', 'paused', 'closed'],
+  })
+  eventType: string;
+
+  @ApiProperty({
+    description: 'Liquidity provider address (for liquidity events)',
+    example: '0x47b245f2a3c7557d855e4d800890c4a524a42cc8',
+    required: false,
+  })
+  providerAddress?: string;
+
+  @ApiProperty({
+    description: 'Liquidity amount (for liquidity events)',
+    example: '10000000000',
+    required: false,
+  })
+  liquidityAmount?: string;
+
+  @ApiProperty({
+    description: 'Minimum AI score (for updated events)',
+    example: 70,
+    required: false,
+  })
+  minAiScore?: number;
+
+  @ApiProperty({
+    description: 'Interest rate (for updated events)',
+    example: 1000,
+    required: false,
+  })
+  interestRate?: number;
+
+  @ApiProperty({
+    description: 'Event timestamp',
+    example: '1759316702000',
+  })
+  eventTimestamp: string;
+
+  @ApiProperty({
+    description: 'Block number',
+    example: '11412397',
+  })
+  blockNumber: string;
+
+  @ApiProperty({
+    description: 'Transaction hash',
+    example: '0xbd6e65eaa1fdb2e65a8fedd470caf3171c06ac83801ab18faa6228e9f9c2ec80',
+  })
+  transactionHash: string;
+}
+
+export class PoolHistoryDto {
+  @ApiProperty({
+    description: 'List of pool history events',
+    type: [PoolHistoryEventDto],
+  })
+  items: PoolHistoryEventDto[];
+}
+
 export class PoolDto {
   @ApiProperty({
     description: 'Pool ID',
-    example: 'pool_12345',
+    example: '1',
   })
   poolId: string;
+
+  @ApiProperty({
+    description: 'Pool ID (alias for poolId)',
+    example: '1',
+  })
+  id: string;
 
   @ApiProperty({
     description: 'Pool creator address',
     example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53',
   })
   creator: string;
+
+  @ApiProperty({
+    description: 'Transaction hash of pool creation',
+    example: '0xbd6e65eaa1fdb2e65a8fedd470caf3171c06ac83801ab18faa6228e9f9c2ec80',
+  })
+  transactionHash: string;
 
   @ApiProperty({
     description: 'Minimum AI score required for loans',
@@ -22,7 +109,7 @@ export class PoolDto {
 
   @ApiProperty({
     description: 'Interest rate for loans (in basis points)',
-    example: 500,
+    example: 1000,
   })
   interestRate: number;
 
@@ -33,16 +120,28 @@ export class PoolDto {
   createdAt: string;
 
   @ApiProperty({
+    description: 'Last updated timestamp',
+    example: '1759329172000',
+  })
+  lastUpdated: string;
+
+  @ApiProperty({
     description: 'Total liquidity in the pool',
-    example: '1000000000000000000',
+    example: '15000000000',
   })
   totalLiquidity: string;
 
   @ApiProperty({
     description: 'Number of unique liquidity providers',
-    example: 5,
+    example: 1,
   })
   liquidityProviderCount: number;
+
+  @ApiProperty({
+    description: 'Participant count (alias for liquidityProviderCount)',
+    example: 1,
+  })
+  participantCount: number;
 
   @ApiProperty({
     description: 'Number of active loans',
@@ -68,6 +167,43 @@ export class PoolDto {
     enum: ['active', 'inactive'],
   })
   status: 'active' | 'inactive';
+
+  @ApiProperty({
+    description: 'Minimum loan duration in seconds',
+    example: '86400',
+  })
+  minDuration: string;
+
+  @ApiProperty({
+    description: 'Maximum loan duration in seconds',
+    example: '2592000',
+  })
+  maxDuration: string;
+
+  @ApiProperty({
+    description: 'Minimum loan amount',
+    example: '1000000000',
+  })
+  minLoanAmount: string;
+
+  @ApiProperty({
+    description: 'Maximum loan amount',
+    example: '5000000000',
+  })
+  maxLoanAmount: string;
+
+  @ApiProperty({
+    description: 'Maximum domain expiration timestamp',
+    example: '999999999',
+  })
+  maxDomainExpiration: string;
+
+  @ApiProperty({
+    description: 'Pool history events',
+    type: 'PoolHistoryDto',
+    required: false,
+  })
+  history?: PoolHistoryDto;
 }
 
 export class UserPoolDto extends PoolDto {
@@ -151,28 +287,14 @@ export class GetPoolsQueryDto {
 
 export class GetPoolsResponseDto {
   @ApiProperty({
-    description: 'List of pools',
-    type: [PoolDto],
+    description: 'Data wrapper containing pools',
+    type: Object,
   })
-  pools: PoolDto[];
-
-  @ApiProperty({
-    description: 'Total number of pools',
-    example: 50,
-  })
-  total: number;
-
-  @ApiProperty({
-    description: 'Current page',
-    example: 1,
-  })
-  page: number;
-
-  @ApiProperty({
-    description: 'Items per page',
-    example: 20,
-  })
-  limit: number;
+  data: {
+    pools: {
+      items: PoolDto[];
+    };
+  };
 }
 
 export class LoanDto {
@@ -264,76 +386,9 @@ export class LoanDto {
   liquidationTimestamp?: string;
 }
 
-export class PoolHistoryEventDto {
-  @ApiProperty({
-    description: 'Pool history event ID',
-    example: 'pool_history_12345',
-  })
-  id: string;
-
-  @ApiProperty({
-    description: 'Pool ID',
-    example: 'pool_12345',
-  })
-  poolId: string;
-
-  @ApiProperty({
-    description: 'Event type',
-    example: 'liquidity_added',
-    enum: ['created', 'liquidity_added', 'liquidity_removed', 'updated', 'paused', 'closed'],
-  })
-  eventType: string;
-
-  @ApiProperty({
-    description: 'Liquidity provider address (for liquidity events)',
-    example: '0xaba3cf48a81225de43a642ca486c1c069ec11a53',
-    required: false,
-  })
-  providerAddress?: string;
-
-  @ApiProperty({
-    description: 'Liquidity amount (for liquidity events)',
-    example: '1000000000',
-    required: false,
-  })
-  liquidityAmount?: string;
-
-  @ApiProperty({
-    description: 'Minimum AI score (for updated events)',
-    example: 70,
-    required: false,
-  })
-  minAiScore?: number;
-
-  @ApiProperty({
-    description: 'Interest rate (for updated events)',
-    example: 500,
-    required: false,
-  })
-  interestRate?: number;
-
-  @ApiProperty({
-    description: 'Event timestamp',
-    example: '2024-01-15T10:30:00Z',
-  })
-  eventTimestamp: string;
-
-  @ApiProperty({
-    description: 'Block number',
-    example: 12345678,
-  })
-  blockNumber: string;
-
-  @ApiProperty({
-    description: 'Transaction hash',
-    example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-  })
-  transactionHash: string;
-}
-
 export class GetPoolDetailResponseDto {
   @ApiProperty({
-    description: 'Pool details',
+    description: 'Pool details with all fields including history',
     type: () => PoolDto,
   })
   pool: PoolDto;
@@ -346,7 +401,7 @@ export class GetPoolDetailResponseDto {
   loans?: LoanDto[];
 
   @ApiProperty({
-    description: 'Pool history events',
+    description: 'Pool history events (legacy field, use pool.history instead)',
     type: [PoolHistoryEventDto],
     required: false,
   })
@@ -784,4 +839,23 @@ export class GetAuctionDetailResponseDto {
     type: () => AuctionDetailDto,
   })
   auction: AuctionDetailDto;
+}
+
+export class PoolsSummaryDto {
+  @ApiProperty({ description: 'Total Value Locked across all pools', example: '1000000000000000000000' })
+  tvl: string;
+
+  @ApiProperty({ description: 'Average APY across all pools (in basis points)', example: 850 })
+  averageApy: number;
+
+  @ApiProperty({ description: 'Total amount of active loans across all pools', example: '50000000000000000000' })
+  totalActiveLoanAmount: string;
+
+  @ApiProperty({ description: 'Available liquidity across all pools', example: '950000000000000000000' })
+  availableLiquidity: string;
+}
+
+export class GetPoolsSummaryResponseDto {
+  @ApiProperty({ type: PoolsSummaryDto })
+  summary: PoolsSummaryDto;
 }

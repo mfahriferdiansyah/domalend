@@ -419,14 +419,24 @@ class DomaLendAPI {
     const response = await this.api.get('/pools', {
       params: {
         page: 1,
-        limit: 20,
-        minAiScore: 50,
         status: 'active',
         sortBy: 'createdAt',
         order: 'desc',
         ...params
       }
     });
+    
+    // Handle new nested response format
+    if (response.data?.data?.pools?.items) {
+      return {
+        pools: response.data.data.pools.items,
+        total: response.data.data.pools.items.length, // Use items length as total for now
+        page: params?.page || 1,
+        limit: params?.limit || 20
+      };
+    }
+    
+    // Fallback to old format
     return response.data;
   }
 
@@ -574,6 +584,18 @@ class DomaLendAPI {
     }>;
   }> {
     const response = await this.api.get(`/pools/${poolId}/stats`);
+    return response.data;
+  }
+
+  async getPoolsSummary(): Promise<{
+    summary: {
+      tvl: string;
+      averageApy: number;
+      totalActiveLoanAmount: string;
+      availableLiquidity: string;
+    };
+  }> {
+    const response = await this.api.get('/pools/summary');
     return response.data;
   }
 

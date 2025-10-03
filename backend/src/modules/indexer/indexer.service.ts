@@ -391,16 +391,16 @@ export class IndexerService {
             firstScoreTimestamp
             lastActivityTimestamp
           }
-          history(orderBy: "createdAt", orderDirection: "asc") {
+          history(orderBy: "eventTimestamp", orderDirection: "asc") {
             items {
               id
               auctionId
-              status
+              eventType
               bidderAddress
               bidAmount
               currentPrice
               finalPrice
-              createdAt
+              eventTimestamp
               blockNumber
               transactionHash
             }

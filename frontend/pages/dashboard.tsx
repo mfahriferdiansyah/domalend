@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SiteIcon } from '@/components/ui/site-icon';
 import domaLendAPI from '@/services/domalend-api';
 // Removed separate domains API call - now included in /dashboard endpoint
 import {
@@ -206,7 +207,7 @@ const DashboardPage: NextPage = () => {
   const DashboardContent = () => {
     if (loading) {
       return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded mb-4"></div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -228,7 +229,7 @@ const DashboardPage: NextPage = () => {
       // If wallet is connected but data failed to load, show error
       if (address && isConnected) {
         return (
-          <div className="container mx-auto px-4 py-8">
+          <div className="max-w-7xl mx-auto px-6 py-8">
             <div className="text-center py-12">
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">Dashboard Data Failed to Load</h2>
@@ -239,8 +240,8 @@ const DashboardPage: NextPage = () => {
                 <Button onClick={() => window.location.reload()}>
                   Refresh Page
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => {
                     // Force refetch
                     const fetchData = async () => {
@@ -266,10 +267,10 @@ const DashboardPage: NextPage = () => {
           </div>
         );
       }
-      
+
       // If wallet is not connected, show connect message
       return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold mb-2">Welcome to DomaLend</h2>
             <p className="text-gray-600 mb-4">Connect your wallet to view your dashboard</p>
@@ -285,7 +286,7 @@ const DashboardPage: NextPage = () => {
 
     if (error) {
       return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="text-center py-12">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Error Loading Dashboard</h2>
@@ -300,55 +301,107 @@ const DashboardPage: NextPage = () => {
     }
 
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-            <p className="text-gray-600">Overview of your lending portfolio</p>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="mb-8 flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+              <p className="text-gray-600">Overview of your lending portfolio</p>
+            </div>
           </div>
-        </div>
 
-        {/* Portfolio Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Portfolio</p>
-                  <p className="text-2xl font-bold">${parseInt(data.stats.totalPortfolio).toLocaleString()}</p>
-                </div>
-                <Target className="h-8 w-8 text-blue-500" />
+          {/* Portfolio Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+              {parseInt(data.stats.totalPortfolio) > 0 && (
+                <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.05" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M0,80 Q75,75 150,70 T300,65 L300,120 L0,120 Z"
+                    fill="url(#blueGradient)"
+                  />
+                  <path
+                    d="M0,80 Q75,75 150,70 T300,65"
+                    stroke="#3b82f6"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                </svg>
+              )}
+              <div className="relative z-10 p-6">
+                <p className="text-sm font-medium text-gray-600">Total Portfolio</p>
+                <p className="text-2xl font-bold">
+                  ${parseInt(data.stats.totalPortfolio).toLocaleString()}
+                </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Active Loans</p>
-                  <p className="text-2xl font-bold">${parseInt(data.stats.activeLoansValue).toLocaleString()}</p>
-                  <p className="text-xs text-gray-500 mt-1">{data.stats.activeLoansCount} loans</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-green-500" />
+            <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+              {parseInt(data.stats.activeLoansValue) > 0 && (
+                <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#22c55e" stopOpacity="0.05" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M0,60 Q75,55 150,65 T300,70 L300,120 L0,120 Z"
+                    fill="url(#greenGradient)"
+                  />
+                  <path
+                    d="M0,60 Q75,55 150,65 T300,70"
+                    stroke="#22c55e"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                </svg>
+              )}
+              <div className="relative z-10 p-6">
+                <p className="text-sm font-medium text-gray-600">Active Loans</p>
+                <p className="text-2xl font-bold">
+                  ${parseInt(data.stats.activeLoansValue).toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">{data.stats.activeLoansCount} loans</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Liquidity Provided</p>
-                  <p className="text-2xl font-bold">${parseInt(data.stats.liquidityProvided).toLocaleString()}</p>
-                  <p className="text-xs text-gray-500 mt-1">{data.stats.liquidityPoolsCount} pools</p>
-                </div>
-                <Droplets className="h-8 w-8 text-blue-500" />
+            <div className="relative overflow-hidden rounded-lg bg-white shadow h-32">
+              {parseInt(data.stats.liquidityProvided) > 0 && (
+                <svg viewBox="0 0 300 120" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="dropletGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.05" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M0,70 Q75,80 150,72 T300,65 L300,120 L0,120 Z"
+                    fill="url(#dropletGradient)"
+                  />
+                  <path
+                    d="M0,70 Q75,80 150,72 T300,65"
+                    stroke="#06b6d4"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                </svg>
+              )}
+              <div className="relative z-10 p-6">
+                <p className="text-sm font-medium text-gray-600">Liquidity Provided</p>
+                <p className="text-2xl font-bold">
+                  ${parseInt(data.stats.liquidityProvided).toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">{data.stats.liquidityPoolsCount} pools</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* <Card>
+            {/* <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -360,303 +413,302 @@ const DashboardPage: NextPage = () => {
               </div>
             </CardContent>
           </Card> */}
-        </div>
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Loan History */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Loan History</span>
-                <Link href="/loans">
-                  <Button variant="outline" size="sm">View All</Button>
-                </Link>
-              </CardTitle>
-              <div className="flex gap-2 mt-4 flex-wrap">
-                {(() => {
-                  const stats = getLoanStats(data.userLoans);
-                  return ['all', 'active', 'overdue', 'repaid', 'liquidated'].map((status) => (
-                    <Button
-                      key={status}
-                      variant={loanFilter === status ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setLoanFilter(status as any)}
-                      className="text-xs"
-                    >
-                      {status.charAt(0).toUpperCase() + status.slice(1)} ({stats[status as keyof typeof stats]})
-                    </Button>
-                  ));
-                })()}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {(() => {
-                  const filteredLoans = getFilteredLoans(data.userLoans);
-                  return filteredLoans.map((loan) => (
-                    <div key={loan.loanId} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="font-semibold">{loan.domainName}</div>
-                        <div className="text-sm text-gray-600">
-                          Due: {loan.repaymentDate}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          ID: {loan.loanId} • Pool: {loan.poolId} • AI Score: {loan.aiScore}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold">${parseInt(loan.loanAmount).toLocaleString()}</div>
-                        <Badge className={getLoanStatusColor(loan.status)}>
-                          {loan.status}
-                        </Badge>
-                        {loan.status === 'liquidated' && loan.liquidationTimestamp && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Liquidated: {new Date(parseInt(loan.liquidationTimestamp)).toLocaleDateString()}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Loan History */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Loan History</span>
+                </CardTitle>
+                <div className="flex gap-2 mt-4 flex-wrap">
+                  {(() => {
+                    const stats = getLoanStats(data.userLoans);
+                    return ['all', 'active', 'overdue', 'repaid', 'liquidated'].map((status) => (
+                      <Button
+                        key={status}
+                        variant={loanFilter === status ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setLoanFilter(status as any)}
+                        className="text-xs"
+                      >
+                        {status.charAt(0).toUpperCase() + status.slice(1)} ({stats[status as keyof typeof stats]})
+                      </Button>
+                    ));
+                  })()}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {(() => {
+                    const filteredLoans = getFilteredLoans(data.userLoans);
+                    return filteredLoans.map((loan) => (
+                      <div key={loan.loanId} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3 flex-1">
+                          <SiteIcon
+                            domain={loan.domainName}
+                            size={24}
+                            className="flex-shrink-0"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold">{loan.domainName}</div>
+                          <div className="text-sm text-gray-600">
+                            Due: {loan.repaymentDate}
                           </div>
-                        )}
+                          <div className="text-xs text-gray-500 mt-1">
+                            ID: {loan.loanId} • Pool: {loan.poolId} • AI Score: {loan.aiScore}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">${parseInt(loan.loanAmount).toLocaleString()}</div>
+                          <Badge className={getLoanStatusColor(loan.status)}>
+                            {loan.status}
+                          </Badge>
+                          {loan.status === 'liquidated' && loan.liquidationTimestamp && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Liquidated: {new Date(parseInt(loan.liquidationTimestamp)).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    ));
+                  })()}
+                  {getFilteredLoans(data.userLoans).length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No {loanFilter === 'all' ? '' : loanFilter} loans</p>
+                      {loanFilter === 'all' && (
+                        <Link href="/domains">
+                          <Button className="mt-2" size="sm">Browse Domains</Button>
+                        </Link>
+                      )}
                     </div>
-                  ));
-                })()}
-                {getFilteredLoans(data.userLoans).length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No {loanFilter === 'all' ? '' : loanFilter} loans</p>
-                    {loanFilter === 'all' && (
-                      <Link href="/domains">
-                        <Button className="mt-2" size="sm">Browse Domains</Button>
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Liquidity Positions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Liquidity Positions</span>
-                <Link href="/pools">
-                  <Button variant="outline" size="sm">View All</Button>
-                </Link>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {data.liquidityPositions.map((position, index) => (
-                  <div key={index} className="p-3 border rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-semibold">{position.poolName}</div>
-                      <Badge className="bg-blue-100 text-blue-800">
-                        {position.apy}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Contribution:</span>
-                        <div className="font-semibold">${parseInt(position.contribution).toLocaleString()}</div>
+            {/* Liquidity Positions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Liquidity Positions</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {data.liquidityPositions.map((position, index) => (
+                    <div key={index} className="p-3 border rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-semibold">{position.poolName}</div>
+                        <Badge className="bg-blue-100 text-blue-800">
+                          {position.apy}
+                        </Badge>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Earnings:</span>
-                        <div className="font-semibold text-green-600">${parseInt(position.earnings).toLocaleString()}</div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Contribution:</span>
+                          <div className="font-semibold">${parseInt(position.contribution).toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Earnings:</span>
+                          <div className="font-semibold text-green-600">${parseInt(position.earnings).toLocaleString()}</div>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                  {data.liquidityPositions.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No liquidity positions</p>
+                      <Link href="/pools">
+                        <Button className="mt-2" size="sm">Browse Pools</Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+
+            {/* Listed Domains Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Gavel className="h-5 w-5" />
+                    Listed on Doma
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.ownedNFTs && data.ownedNFTs.length > 0 ? (
+                  <div className="space-y-3">
+                    {data.ownedNFTs.map((domain) => (
+                      <div key={domain.tokenId} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <SiteIcon
+                            domain={domain.name || `domain-${domain.tokenId}`}
+                            size={40}
+                            className="flex-shrink-0"
+                          />
+                          <div>
+                            <div className="font-semibold">{domain.name || `Domain #${domain.tokenId}`}</div>
+                            <div className="text-sm text-gray-600 flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Listed on marketplace
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-orange-100 text-orange-800">
+                            Listed
+                          </Badge>
+                          <Link href={`/domains/${domain.tokenId}`}>
+                            <Button variant="ghost" size="sm">
+                              <ArrowUpRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+
                   </div>
-                ))}
-                {data.liquidityPositions.length === 0 && (
+                ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <p>No liquidity positions</p>
-                    <Link href="/pools">
-                      <Button className="mt-2" size="sm">Browse Pools</Button>
+                    <Gavel className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="mb-2">No domains listed yet</p>
+                    <p className="text-sm text-gray-400 mb-4">
+                      List your domains on the Doma marketplace to earn from sales
+                    </p>
+                    <Link href="/domains">
+                      <Button size="sm">List a Domain</Button>
                     </Link>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
+            {/* Scored Domains Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Star className="h-5 w-5" />
+                    Scored Domains
+                  </span>
 
-          {/* Listed Domains Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Gavel className="h-5 w-5" />
-                  Listed on Doma
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.ownedNFTs && data.ownedNFTs.length > 0 ? (
-                <div className="space-y-3">
-                  {data.ownedNFTs.map((domain) => (
-                    <div key={domain.tokenId} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-semibold text-orange-600">
-                            {domain.name ? domain.name.charAt(0).toUpperCase() : 'D'}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="font-semibold">{domain.name || `Domain #${domain.tokenId}`}</div>
-                          <div className="text-sm text-gray-600 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            Listed on marketplace
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.scoredDomains && data.scoredDomains.length > 0 ? (
+                  <div className="space-y-3">
+                    {data.scoredDomains.map((domain) => (
+                      <div key={domain.tokenId} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <SiteIcon
+                            domain={domain.name}
+                            size={40}
+                            className="flex-shrink-0"
+                          />
+                          <div>
+                            <div className="font-semibold">{domain.name}</div>
+                            <div className="text-sm text-gray-600 flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              .{domain.tld} • {domain.characterLength} chars
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-orange-100 text-orange-800">
-                          Listed
-                        </Badge>
-                        <Link href={`/domains/${domain.tokenId}`}>
-                          <Button variant="ghost" size="sm">
-                            <ArrowUpRight className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Gavel className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p className="mb-2">No domains listed yet</p>
-                  <p className="text-sm text-gray-400 mb-4">
-                    List your domains on the Doma marketplace to earn from sales
-                  </p>
-                  <Link href="/domains">
-                    <Button size="sm">List a Domain</Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Scored Domains Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Star className="h-5 w-5" />
-                  Scored Domains
-                </span>
-
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.scoredDomains && data.scoredDomains.length > 0 ? (
-                <div className="space-y-3">
-                  {data.scoredDomains.map((domain) => (
-                    <div key={domain.tokenId} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-semibold text-purple-600">
-                            {domain.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="font-semibold">{domain.name}</div>
-                          <div className="text-sm text-gray-600 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            .{domain.tld} • {domain.characterLength} chars
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-green-600">
+                              {domain.aiScore.score}/100
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {domain.aiScore.confidence}% confidence
+                            </div>
                           </div>
+                          <Link href={`/domains/${domain.tokenId}`}>
+                            <Button variant="ghost" size="sm">
+                              <ArrowUpRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-green-600">
-                            {domain.aiScore.score}/100
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {domain.aiScore.confidence}% confidence
-                          </div>
-                        </div>
-                        <Link href={`/domains/${domain.tokenId}`}>
-                          <Button variant="ghost" size="sm">
-                            <ArrowUpRight className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
 
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Star className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p className="mb-2">No scored domains yet</p>
-                  <p className="text-sm text-gray-400 mb-4">
-                    Add domains to your portfolio and request AI scoring to get started
-                  </p>
-                  <Link href="/domains/add">
-                    <Button size="sm">Score a Domain</Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-
-          {/* Additional Sections */}
-          {/* My Auction Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>My Auction Activity</span>
-                <Link href="/auctions">
-                  <Button variant="outline" size="sm">Browse All Auctions</Button>
-                </Link>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <Gavel className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p className="mb-2">No active auction activity</p>
-                <p className="text-sm text-gray-400 mb-4">
-                  This will show auctions related to your domains, loans, or bids
-                </p>
-                <Link href="/auctions">
-                  <Button size="sm">Browse Auctions</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {data.recentActivity.map((activity, index) => (
-                  <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
-                    <div className={`p-2 rounded-full ${getActivityColor(activity.type)}`}>
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">{activity.description}</div>
-                      <div className="text-xs text-gray-600">
-                        {activity.date}
-                      </div>
-                    </div>
-                    <div className="text-sm font-semibold">
-                      ${parseInt(activity.amount).toLocaleString()}
-                    </div>
                   </div>
-                ))}
-                {data.recentActivity.length === 0 && (
+                ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <p>No recent activity</p>
+                    <Star className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="mb-2">No scored domains yet</p>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Add domains to your portfolio and request AI scoring to get started
+                    </p>
+                    <Link href="/domains/add">
+                      <Button size="sm">Score a Domain</Button>
+                    </Link>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
+
+            {/* Additional Sections */}
+            {/* My Auction Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>My Auction Activity</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-gray-500">
+                  <Gavel className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="mb-2">No active auction activity</p>
+                  <p className="text-sm text-gray-400 mb-4">
+                    This will show auctions related to your domains, loans, or bids
+                  </p>
+                  <Link href="/auctions">
+                    <Button size="sm">Browse Auctions</Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Recent Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {data.recentActivity.map((activity, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
+                      <div className={`p-2 rounded-full ${getActivityColor(activity.type)}`}>
+                        {getActivityIcon(activity.type)}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{activity.description}</div>
+                        <div className="text-xs text-gray-600">
+                          {activity.date}
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold">
+                        ${parseInt(activity.amount).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                  {data.recentActivity.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No recent activity</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
         </div>
       </div>
     );

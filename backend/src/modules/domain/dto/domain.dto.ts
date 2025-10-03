@@ -22,6 +22,62 @@ export class DomaNFTAttributeDto {
   display_type?: string;
 }
 
+export class DomainAnalyticsDto {
+  @ApiProperty({
+    description: 'Domain token ID',
+    example: '54344964066288468101530659531467425324551312134658892013131579195659464473615',
+  })
+  domainTokenId: string;
+
+  @ApiProperty({
+    description: 'Domain name',
+    example: 'example.com',
+  })
+  domainName: string;
+
+  @ApiProperty({
+    description: 'Latest AI score (0-100)',
+    example: 85,
+  })
+  latestAiScore: number;
+
+  @ApiProperty({
+    description: 'Total number of scoring requests',
+    example: 3,
+  })
+  totalScoringRequests: number;
+
+  @ApiProperty({
+    description: 'Total number of loans created',
+    example: 2,
+  })
+  totalLoansCreated: number;
+
+  @ApiProperty({
+    description: 'Total loan volume in USDC (6 decimals)',
+    example: '1500000000',
+  })
+  totalLoanVolume: string;
+
+  @ApiProperty({
+    description: 'Whether domain has been liquidated',
+    example: false,
+  })
+  hasBeenLiquidated: boolean;
+
+  @ApiProperty({
+    description: 'First scoring timestamp',
+    example: '1725360000000',
+  })
+  firstScoreTimestamp: string;
+
+  @ApiProperty({
+    description: 'Last activity timestamp',
+    example: '1725446400000',
+  })
+  lastActivityTimestamp: string;
+}
+
 export class DomaNFTDto {
   @ApiProperty({
     description: 'Domain token ID',
@@ -92,6 +148,13 @@ export class DomaNFTDto {
     required: false,
   })
   registrar?: string;
+
+  @ApiProperty({
+    description: 'Domain analytics from indexer (included when analytics are available)',
+    type: () => DomainAnalyticsDto,
+    required: false,
+  })
+  analytics?: DomainAnalyticsDto;
 }
 
 export class AddressNFTBalanceDto {
