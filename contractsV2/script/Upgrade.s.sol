@@ -44,7 +44,7 @@ contract UpgradeScript is Script {
         console.log("");
 
         // Skip version check - old implementations don't have getVersion()
-        console.log("Upgrading to v5.0.0...");
+        console.log("Upgrading to v5.1.0...");
         console.log("");
 
         vm.startBroadcast(deployerPrivateKey);

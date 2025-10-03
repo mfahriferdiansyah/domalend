@@ -17,7 +17,7 @@ import "./interfaces/IDutchAuction.sol";
 contract DutchAuctionUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IERC721Receiver, IDutchAuction {
     using SafeERC20 for IERC20;
 
-    string public constant VERSION = "5.0.0";
+    string public constant VERSION = "5.1.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;

@@ -21,7 +21,7 @@ contract AIOracleUpgradeable is
 
     bytes32 public constant SCORING_SERVICE_ROLE = keccak256("SCORING_SERVICE_ROLE");
     bytes32 public constant SERVICE_MANAGER_ROLE = keccak256("SERVICE_MANAGER_ROLE");
-    string public constant VERSION = "5.0.0";
+    string public constant VERSION = "5.1.0";
 
     address public backendService;
     address public serviceManagerAddress; // AVS ServiceManager address
@@ -281,8 +281,9 @@ contract AIOracleUpgradeable is
     }
 
     function _isScoreExpired(uint256 timestamp) internal view returns (bool) {
-        if (timestamp == 0) return true;
-        return block.timestamp > timestamp + SCORE_VALIDITY_PERIOD;
+        // if (timestamp == 0) return true;
+        // return block.timestamp > timestamp + SCORE_VALIDITY_PERIOD;
+        return false; // Disable expiration for simplicity
     }
 
     function _updateStats(bool isNewRequest, bool isNewSubmission) internal {
