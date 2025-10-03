@@ -16,7 +16,7 @@ import "./interfaces/ILoanManager.sol";
 contract LoanManagerUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, ILoanManager {
     using SafeERC20 for IERC20;
 
-    string public constant VERSION = "4.0.0";
+    string public constant VERSION = "5.1.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;

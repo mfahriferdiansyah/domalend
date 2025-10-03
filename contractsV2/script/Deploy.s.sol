@@ -147,7 +147,7 @@ contract DeployScript is Script {
 
         // Summary
         console.log("========================================");
-        console.log("DEPLOYMENT COMPLETE - V1.0.0");
+        console.log("DEPLOYMENT COMPLETE - V5.0.0");
         console.log("========================================");
         console.log("");
         console.log("Proxy Addresses (use these):");

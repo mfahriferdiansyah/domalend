@@ -16,7 +16,7 @@ import "./interfaces/ILoanManager.sol";
 contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
-    string public constant VERSION = "4.0.0";
+    string public constant VERSION = "5.1.0";
 
     // Changed from immutable to storage variables
     IERC20 public usdc;
@@ -188,10 +188,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
     );
 
     event LoanRequestCancelled(
-        uint256 indexed requestId,
-        address indexed borrower,
-        uint256 totalRefunded,
-        string reason
+        uint256 indexed requestId, address indexed borrower, uint256 totalRefunded, string reason
     );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -199,12 +196,10 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         _disableInitializers();
     }
 
-    function initialize(
-        address initialOwner,
-        address _usdc,
-        address _domaProtocol,
-        address _aiOracle
-    ) public initializer {
+    function initialize(address initialOwner, address _usdc, address _domaProtocol, address _aiOracle)
+        public
+        initializer
+    {
         __Ownable_init(initialOwner);
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
@@ -223,11 +218,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         loanManager = ILoanManager(_loanManager);
     }
 
-    function createLiquidityPool(CreatePoolParams memory params)
-        external
-        nonReentrant
-        returns (uint256 poolId)
-    {
+    function createLiquidityPool(CreatePoolParams memory params) external nonReentrant returns (uint256 poolId) {
         require(params.initialLiquidity > 0, "Initial liquidity cannot be zero");
         require(params.minLoanAmount < params.maxLoanAmount, "Invalid loan amount range");
         require(params.minDuration > 0, "Duration cannot be zero");
@@ -273,10 +264,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         );
     }
 
-    function addLiquidity(uint256 poolId, uint256 amount)
-        external
-        nonReentrant
-    {
+    function addLiquidity(uint256 poolId, uint256 amount) external nonReentrant {
         LiquidityPool storage pool = pools[poolId];
         require(pool.isActive, "Pool not active");
         require(pool.allowAdditionalProviders || msg.sender == pool.creator, "Additional providers not allowed");
@@ -296,19 +284,11 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         usdc.safeTransferFrom(msg.sender, address(this), amount);
 
         emit LiquidityAdded(
-            poolId,
-            msg.sender,
-            amount,
-            pool.totalLiquidity,
-            pool.providerShares[msg.sender],
-            block.timestamp
+            poolId, msg.sender, amount, pool.totalLiquidity, pool.providerShares[msg.sender], block.timestamp
         );
     }
 
-    function removeLiquidity(uint256 poolId, uint256 sharePercentage)
-        external
-        nonReentrant
-    {
+    function removeLiquidity(uint256 poolId, uint256 sharePercentage) external nonReentrant {
         require(sharePercentage > 0 && sharePercentage <= 100, "Invalid share percentage");
 
         LiquidityPool storage pool = pools[poolId];
@@ -328,12 +308,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         usdc.safeTransfer(msg.sender, totalToTransfer);
 
         emit LiquidityRemoved(
-            poolId,
-            msg.sender,
-            liquidityToRemove,
-            interestEarned,
-            pool.providerShares[msg.sender],
-            block.timestamp
+            poolId, msg.sender, liquidityToRemove, interestEarned, pool.providerShares[msg.sender], block.timestamp
         );
     }
 
@@ -363,48 +338,43 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         return (true, "");
     }
 
-    function requestInstantLoan(InstantLoanParams memory params)
-        external
-        nonReentrant
-        returns (uint256 loanId)
-    {
-        (bool eligible, string memory reason) = _canGetInstantLoan(
-            msg.sender,
-            params.domainTokenId,
-            params.poolId,
-            params.requestedAmount
-        );
+    function requestInstantLoan(InstantLoanParams memory params) external nonReentrant returns (uint256 loanId) {
+        (bool eligible, string memory reason) =
+            _canGetInstantLoan(msg.sender, params.domainTokenId, params.poolId, params.requestedAmount);
         require(eligible, reason);
 
         uint256 aiScore = aiOracle.scoreDomain(params.domainTokenId);
         loanId = _executeInstantLoan(params, aiScore);
     }
 
-    function createLoanRequest(CreateRequestParams memory params)
-        external
-        nonReentrant
-        returns (uint256 requestId)
-    {
+    function createLoanRequest(CreateRequestParams memory params) external nonReentrant returns (uint256 requestId) {
         require(params.campaignDuration > 0, "Campaign duration cannot be zero");
         require(params.requestedAmount > 0, "Requested amount cannot be zero");
 
         uint256 campaignDeadline = block.timestamp + params.campaignDuration;
 
-        require(params.repaymentDeadline > block.timestamp,
-            "INVALID_TIMELINE: Repayment deadline cannot be in the past");
+        require(
+            params.repaymentDeadline > block.timestamp, "INVALID_TIMELINE: Repayment deadline cannot be in the past"
+        );
 
-        require(params.repaymentDeadline > campaignDeadline,
-            string(abi.encodePacked(
-                "INVALID_TIMELINE: Repayment deadline (",
-                Strings.toString(params.repaymentDeadline),
-                ") must be after campaign deadline (",
-                Strings.toString(campaignDeadline),
-                "). Current time: ",
-                Strings.toString(block.timestamp)
-            )));
+        require(
+            params.repaymentDeadline > campaignDeadline,
+            string(
+                abi.encodePacked(
+                    "INVALID_TIMELINE: Repayment deadline (",
+                    Strings.toString(params.repaymentDeadline),
+                    ") must be after campaign deadline (",
+                    Strings.toString(campaignDeadline),
+                    "). Current time: ",
+                    Strings.toString(block.timestamp)
+                )
+            )
+        );
 
-        require(params.repaymentDeadline >= campaignDeadline + MIN_LOAN_DURATION,
-            "INVALID_TIMELINE: Minimum loan duration required");
+        require(
+            params.repaymentDeadline >= campaignDeadline + MIN_LOAN_DURATION,
+            "INVALID_TIMELINE: Minimum loan duration required"
+        );
 
         (bool eligible, string memory reason) = _validateDomainEligibility(msg.sender, params.domainTokenId);
         require(eligible, reason);
@@ -436,10 +406,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         );
     }
 
-    function fundLoanRequest(uint256 requestId, uint256 amount)
-        external
-        nonReentrant
-    {
+    function fundLoanRequest(uint256 requestId, uint256 amount) external nonReentrant {
         LoanRequest storage request = loanRequests[requestId];
         require(request.isActive, "Request not active");
         require(!request.isExecuted, "Request already executed");
@@ -476,12 +443,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         }
 
         emit LoanRequestFunded(
-            requestId,
-            msg.sender,
-            actualAmount,
-            request.totalFunded,
-            remainingAmountForEmit,
-            isFullyFunded
+            requestId, msg.sender, actualAmount, request.totalFunded, remainingAmountForEmit, isFullyFunded
         );
 
         if (isFullyFunded) {
@@ -489,11 +451,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         }
     }
 
-    function executeLoanRequest(uint256 requestId)
-        external
-        nonReentrant
-        returns (uint256 loanId)
-    {
+    function executeLoanRequest(uint256 requestId) external nonReentrant returns (uint256 loanId) {
         LoanRequest storage request = loanRequests[requestId];
         require(request.totalFunded >= request.requestedAmount, "Request not fully funded");
 
@@ -519,10 +477,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         return _executeLoanRequest(requestId);
     }
 
-    function cancelLoanRequest(uint256 requestId)
-        external
-        nonReentrant
-    {
+    function cancelLoanRequest(uint256 requestId) external nonReentrant {
         LoanRequest storage request = loanRequests[requestId];
         require(request.borrower == msg.sender, "Only borrower can cancel");
         require(request.isActive, "Request not active");
@@ -533,18 +488,10 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
 
         _refundContributors(requestId);
 
-        emit LoanRequestCancelled(
-            requestId,
-            msg.sender,
-            request.totalFunded,
-            "Cancelled by borrower"
-        );
+        emit LoanRequestCancelled(requestId, msg.sender, request.totalFunded, "Cancelled by borrower");
     }
 
-    function claimRefundExpiredCampaign(uint256 requestId)
-        external
-        nonReentrant
-    {
+    function claimRefundExpiredCampaign(uint256 requestId) external nonReentrant {
         LoanRequest storage request = loanRequests[requestId];
         require(request.isActive, "Request not active");
         require(!request.isExecuted, "Request already executed");
@@ -570,12 +517,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
 
         usdc.safeTransfer(msg.sender, refundAmount);
 
-        emit LoanRequestCancelled(
-            requestId,
-            msg.sender,
-            refundAmount,
-            "Refund claimed for expired campaign"
-        );
+        emit LoanRequestCancelled(requestId, msg.sender, refundAmount, "Refund claimed for expired campaign");
     }
 
     function _validateDomainEligibility(address caller, uint256 domainTokenId)
@@ -636,11 +578,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         return (true, "");
     }
 
-    function _calculateProviderShares(uint256 poolId, uint256 newLiquidity)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateProviderShares(uint256 poolId, uint256 newLiquidity) internal view returns (uint256) {
         LiquidityPool storage pool = pools[poolId];
         if (pool.totalLiquidity == 0) {
             return 10000;
@@ -648,10 +586,7 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         return (newLiquidity * 10000) / pool.totalLiquidity;
     }
 
-    function _executeInstantLoan(InstantLoanParams memory params, uint256 aiScore)
-        internal
-        returns (uint256)
-    {
+    function _executeInstantLoan(InstantLoanParams memory params, uint256 aiScore) internal returns (uint256) {
         LiquidityPool storage pool = pools[params.poolId];
         pool.availableLiquidity -= params.requestedAmount;
         pool.totalLoansIssued++;
@@ -687,15 +622,14 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         return loanId;
     }
 
-    function _executeLoanRequest(uint256 requestId)
-        internal
-        returns (uint256)
-    {
+    function _executeLoanRequest(uint256 requestId) internal returns (uint256) {
         LoanRequest storage request = loanRequests[requestId];
         require(!request.isExecuted, "Already executed");
 
-        require(request.repaymentDeadline > request.campaignDeadline,
-            "UNDERFLOW_PREVENTION: Repayment deadline must be after campaign deadline");
+        require(
+            request.repaymentDeadline > request.campaignDeadline,
+            "UNDERFLOW_PREVENTION: Repayment deadline must be after campaign deadline"
+        );
 
         request.isExecuted = true;
         request.isActive = false;
@@ -732,27 +666,18 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
         totalVolumeProcessed += request.requestedAmount;
 
         emit LoanExecuted(
-            loanId,
-            requestId,
-            request.borrower,
-            request.domainTokenId,
-            request.requestedAmount,
-            request.contributors
+            loanId, requestId, request.borrower, request.domainTokenId, request.requestedAmount, request.contributors
         );
 
         return loanId;
     }
 
-    function _updatePoolStats(uint256 poolId, uint256 loanAmount)
-        internal
-    {
+    function _updatePoolStats(uint256 poolId, uint256 loanAmount) internal {
         totalLoansExecuted++;
         totalVolumeProcessed += loanAmount;
     }
 
-    function _refundContributors(uint256 requestId)
-        internal
-    {
+    function _refundContributors(uint256 requestId) internal {
         LoanRequest storage request = loanRequests[requestId];
 
         for (uint256 i = 0; i < request.contributors.length; i++) {
@@ -808,19 +733,9 @@ contract SatoruLendingUpgradeable is Initializable, OwnableUpgradeable, Reentran
     function getProtocolStats()
         external
         view
-        returns (
-            uint256 totalPools,
-            uint256 totalLiquidity,
-            uint256 totalLoans,
-            uint256 totalVolume
-        )
+        returns (uint256 totalPools, uint256 totalLiquidity, uint256 totalLoans, uint256 totalVolume)
     {
-        return (
-            totalPoolsCreated,
-            totalLiquidityProvided,
-            totalLoansExecuted,
-            totalVolumeProcessed
-        );
+        return (totalPoolsCreated, totalLiquidityProvided, totalLoansExecuted, totalVolumeProcessed);
     }
 
     function getVersion() external pure returns (string memory) {

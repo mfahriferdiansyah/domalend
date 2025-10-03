@@ -63,42 +63,64 @@ ponder.on("AIOracle:ScoringRequested", async ({ event, context }) => {
     });
     console.log(`✅ [AIOracle] Database insert successful`);
 
-    // 2. Call intelligent submit-score endpoint with just tokenId
-    console.log(`📝 [AIOracle] Requesting backend to handle complete scoring pipeline...`);
+    // 2. Check if auto-submission is enabled
+    const autoSubmitEnabled = process.env.ENABLE_AUTO_SCORE_SUBMISSION === 'true';
 
-    // Update database status
-    await context.db.update(scoringEvent, {
-      id: eventId
-    }).set({
-      status: 'backend_called',
-      backendCallTimestamp: new Date(),
-    });
-
-    // 3. Backend handles: tokenId → metadata → domain → cache → scoring → contract submission
     let submitResponse;
     let txHash = '';
     let domainName = '';
     let scoreData = { totalScore: 0, confidence: 0, reasoning: '' };
 
-    try {
-      submitResponse = await backendApi.submitScoreByTokenId({ tokenId: domainTokenId.toString() });
+    if (autoSubmitEnabled) {
+      console.log(`📝 [AIOracle] Auto-submission enabled - calling backend to handle complete scoring pipeline...`);
 
-      if (submitResponse.success) {
-        txHash = submitResponse.txHash || '';
-        domainName = submitResponse.domainName || `domain-${domainTokenId}`;
-        scoreData = {
-          totalScore: submitResponse.score || 0,
-          confidence: 90, // Default confidence
-          reasoning: submitResponse.message || 'AI-powered domain scoring'
-        };
-        console.log(`✅ [AIOracle] Backend completed scoring pipeline for ${domainName}: ${scoreData.totalScore}/100 - TX: ${txHash}`);
-      } else {
-        throw new Error(submitResponse.error || 'Backend submission failed');
+      // Update database status
+      await context.db.update(scoringEvent, {
+        id: eventId
+      }).set({
+        status: 'backend_called',
+        backendCallTimestamp: new Date(),
+      });
+
+      // Backend handles: tokenId → metadata → domain → cache → scoring → contract submission
+      try {
+        submitResponse = await backendApi.submitScoreByTokenId({ tokenId: domainTokenId.toString() });
+
+        if (submitResponse.success) {
+          txHash = submitResponse.txHash || '';
+          domainName = submitResponse.domainName || `domain-${domainTokenId}`;
+          scoreData = {
+            totalScore: submitResponse.score || 0,
+            confidence: 90, // Default confidence
+            reasoning: submitResponse.message || 'AI-powered domain scoring'
+          };
+          console.log(`✅ [AIOracle] Backend completed scoring pipeline for ${domainName}: ${scoreData.totalScore}/100 - TX: ${txHash}`);
+        } else {
+          throw new Error(submitResponse.error || 'Backend submission failed');
+        }
+      } catch (contractError) {
+        console.error(`❌ [AIOracle] Backend scoring pipeline failed:`, contractError);
+        domainName = `domain-${domainTokenId}`; // Fallback domain name
+        // Continue processing to record the failure
       }
-    } catch (contractError) {
-      console.error(`❌ [AIOracle] Backend scoring pipeline failed:`, contractError);
-      domainName = `domain-${domainTokenId}`; // Fallback domain name
-      // Continue processing to record the failure
+    } else {
+      console.log(`⏭️  [AIOracle] Auto-submission DISABLED - skipping backend call (AVS operator will handle scoring)`);
+
+      // Just record the event, don't trigger backend submission
+      domainName = `domain-${domainTokenId}`;
+      scoreData = {
+        totalScore: 0,
+        confidence: 0,
+        reasoning: 'Awaiting AVS operator submission'
+      };
+
+      // Update database status to indicate manual mode
+      await context.db.update(scoringEvent, {
+        id: eventId
+      }).set({
+        status: 'awaiting_avs_operator',
+        backendCallTimestamp: new Date(),
+      });
     }
 
     // 4. Update database with completion
@@ -424,10 +446,10 @@ ponder.on("AIOracle:PaidScoringRequested", async ({ event, context }) => {
 });
 
 ponder.on("AIOracle:PaidScoreSubmitted", async ({ event, context }) => {
-  const { requestId, domainTokenId, score, serviceManager, rewardRecipient, rewardAmount, timestamp } = event.args;
+  const { requestId, domainTokenId, score, serviceManager: serviceManagerAddress, rewardRecipient, rewardAmount, timestamp } = event.args;
   const eventId = `${event.transaction.hash}-${event.log.logIndex}`;
 
-  console.log(`✅ [AIOracle] Paid score submitted: requestId ${requestId}, domain ${domainTokenId}, score ${score} by ${serviceManager}`);
+  console.log(`✅ [AIOracle] Paid score submitted: requestId ${requestId}, domain ${domainTokenId}, score ${score} by ${serviceManagerAddress}`);
 
   try {
     const submissionTimestamp = new Date(Number(event.block.timestamp) * 1000);
@@ -438,7 +460,7 @@ ponder.on("AIOracle:PaidScoreSubmitted", async ({ event, context }) => {
       requestId: requestId.toString(),
       domainTokenId: domainTokenId.toString(),
       score: Number(score),
-      serviceManagerAddress: serviceManager,
+      serviceManagerAddress: serviceManagerAddress,
       rewardRecipient: rewardRecipient,
       rewardAmount: rewardAmount.toString(),
       submissionTimestamp,
@@ -455,9 +477,9 @@ ponder.on("AIOracle:PaidScoreSubmitted", async ({ event, context }) => {
       });
 
     // 3. Update service manager stats
-    const existingManager = await context.db.find(serviceManager, { id: serviceManager });
+    const existingManager = await context.db.find(serviceManager, { id: serviceManagerAddress });
     if (existingManager) {
-      await context.db.update(serviceManager, { id: serviceManager })
+      await context.db.update(serviceManager, { id: serviceManagerAddress })
         .set({
           totalScoresSubmitted: existingManager.totalScoresSubmitted + 1,
           totalRewardsEarned: (BigInt(existingManager.totalRewardsEarned) + rewardAmount).toString(),
