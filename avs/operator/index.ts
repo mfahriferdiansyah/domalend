@@ -27,7 +27,7 @@ const openaiAnalyzer = USE_ZKFETCH
 	? new OpenAIAnalyzerZkFetch()
 	: new OpenAIAnalyzer();
 const domainResolver = new DomainResolver(provider);
-const AI_ORACLE_ADDRESS = process.env.AI_ORACLE_ADDRESS;
+const AI_ORACLE_ADDRESS = process.env.AIORACLE_PROXY;
 
 console.log(
 	`🤖 Operator initialized with ${
@@ -278,18 +278,26 @@ const registerOperator = async () => {
 
 	// Check if already registered
 	try {
-		const isRegistered = await ecdsaRegistryContract.operatorRegistered(wallet.address);
+		const isRegistered = await ecdsaRegistryContract.operatorRegistered(
+			wallet.address
+		);
 		if (isRegistered) {
 			console.log("Operator already registered on AVS");
 			return;
 		}
 	} catch (err) {
-		console.log("Could not check registration status, proceeding with registration...");
+		console.log(
+			"Could not check registration status, proceeding with registration..."
+		);
 	}
 
 	console.log("Registering Operator to AVS Registry contract");
 	const tx2 = await ecdsaRegistryContract.registerOperatorWithSignature(
-		[operatorSignature.signature, operatorSignature.salt, operatorSignature.expiry],
+		[
+			operatorSignature.signature,
+			operatorSignature.salt,
+			operatorSignature.expiry,
+		],
 		wallet.address
 	);
 	await tx2.wait();
@@ -385,6 +393,7 @@ export const monitorServiceManagerEvents = async () => {
 	let isFetching = false;
 	const processedTasks = new Set();
 	const blockRangeLimit = 100;
+	let consecutiveErrors = 0;
 
 	const fetchEvents = async () => {
 		if (isFetching) return;
@@ -392,6 +401,7 @@ export const monitorServiceManagerEvents = async () => {
 
 		try {
 			const newBlock = await provider.getBlockNumber();
+			consecutiveErrors = 0; // Reset on success
 			if (newBlock <= latestBlock) return;
 
 			let fromBlock = latestBlock + 1;
@@ -415,10 +425,10 @@ export const monitorServiceManagerEvents = async () => {
 
 					// Create mutable copy of task tuple for contract call (as array)
 					const task = [
-						taskRaw[0],  // domainTokenId
-						taskRaw[1],  // requestId
-						taskRaw[2],  // taskCreatedBlock
-						taskRaw[3]   // taskType
+						taskRaw[0], // domainTokenId
+						taskRaw[1], // requestId
+						taskRaw[2], // taskCreatedBlock
+						taskRaw[3], // taskType
 					];
 
 					if (processedTasks.has(taskIndex.toString())) continue;
@@ -468,8 +478,34 @@ export const monitorServiceManagerEvents = async () => {
 			}
 
 			latestBlock = newBlock;
-		} catch (error) {
-			console.error("Error fetching ServiceManager logs:", error);
+		} catch (error: any) {
+			consecutiveErrors++;
+
+			// Distinguish between RPC errors and other errors
+			const isRpcError =
+				error?.code === "SERVER_ERROR" ||
+				error?.info?.responseStatus?.includes("503");
+
+			if (isRpcError) {
+				console.error(
+					`⚠️  RPC unavailable (attempt ${consecutiveErrors}): ${
+						error.shortMessage || error.message
+					}`
+				);
+				console.error(`   Will retry in 10 seconds...`);
+			} else {
+				console.error(
+					`Error fetching ServiceManager logs (attempt ${consecutiveErrors}):`,
+					error
+				);
+			}
+
+			// Log warning if errors persist
+			if (consecutiveErrors >= 3) {
+				console.warn(
+					`⚠️  ${consecutiveErrors} consecutive errors. Check RPC status: https://rpc-testnet.doma.xyz`
+				);
+			}
 		} finally {
 			isFetching = false;
 		}
