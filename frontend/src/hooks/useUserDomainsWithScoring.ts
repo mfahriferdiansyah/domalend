@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useActiveLoans } from './useActiveLoans';
 
+// Get the base URL from environment variable
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'https://backend-doma.kadzu.dev';
+
 interface ScoringEvent {
   id: string;
   domainTokenId: string;
@@ -66,7 +69,7 @@ export const useUserDomainsWithScoring = (address: string | undefined) => {
     
     try {
       // First, get all user domains with analytics
-      const response = await fetch(`http://localhost:3001/domains/address/${address}?includeAnalytics=true`);
+      const response = await fetch(`${BASE_URL}/domains/address/${address}?includeAnalytics=true`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -86,7 +89,7 @@ export const useUserDomainsWithScoring = (address: string | undefined) => {
           if (domain.analytics) {
             try {
               const detailResponse = await fetch(
-                `http://localhost:3001/domains/${domain.tokenId}?includeRelations=true`
+                `${BASE_URL}/domains/${domain.tokenId}?includeRelations=true`
               );
               
               if (detailResponse.ok) {

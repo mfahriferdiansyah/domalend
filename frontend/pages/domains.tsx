@@ -78,6 +78,7 @@ const DomainsPage: NextPage = () => {
   const filteredDomains = enhancedDomains;
 
   const getScoreColor = (score: number) => {
+    if (score === 0) return 'text-gray-500 font-medium';
     if (score >= 75) return 'text-blue-600 font-medium';
     if (score >= 60) return 'text-orange-600 font-medium';
     return 'text-red-600 font-medium';
@@ -110,10 +111,10 @@ const DomainsPage: NextPage = () => {
             </div>
 
             {/* Table Header */}
-            <div className="grid grid-cols-10 gap-4 px-4 py-3 mb-2">
+            <div className="grid grid-cols-11 gap-4 px-4 py-3 mb-2">
               <div className="col-span-4 h-4 bg-gray-200 rounded"></div>
               <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
-              <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
+              <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
               <div className="col-span-2 h-4 bg-gray-200 rounded"></div>
               <div className="col-span-1 h-4 bg-gray-200 rounded"></div>
             </div>
@@ -121,7 +122,7 @@ const DomainsPage: NextPage = () => {
             {/* Domain Rows */}
             <div className="space-y-2">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="grid grid-cols-10 gap-4 px-4 py-4 bg-white rounded-xl border border-gray-200">
+                <div key={i} className="grid grid-cols-11 gap-4 px-4 py-4 bg-white rounded-xl border border-gray-200">
                   {/* Domain Column */}
                   <div className="col-span-4 flex items-center gap-3">
                     <div className="w-8 h-8 bg-gray-200 rounded"></div>
@@ -136,8 +137,8 @@ const DomainsPage: NextPage = () => {
                   </div>
 
                   {/* Score */}
-                  <div className="col-span-1 text-right">
-                    <div className="h-4 bg-gray-200 rounded w-8 ml-auto"></div>
+                  <div className="col-span-2 text-center">
+                    <div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div>
                   </div>
 
                   {/* Status */}
@@ -329,10 +330,10 @@ const DomainsPage: NextPage = () => {
         {/* Domains Table */}
         <div className="space-y-2">
           {/* Table Header */}
-          <div className="grid grid-cols-10 gap-4 px-4 py-3 text-sm font-medium text-gray-700 bg-transparent">
+          <div className="grid grid-cols-11 gap-4 px-4 py-3 text-sm font-medium text-gray-700 bg-transparent">
             <div className="col-span-4">Domain</div>
             <div className="col-span-2 text-right">Estimated Value</div>
-            <div className="col-span-1 text-right">Score</div>
+            <div className="col-span-2 text-center">Score</div>
             <div className="col-span-2 text-right">Status</div>
             <div className="col-span-1"></div>
           </div>
@@ -346,7 +347,7 @@ const DomainsPage: NextPage = () => {
                 <div
                   className={isMediumRisk ? "rounded-xl p-0.5 bg-gradient-to-r from-blue-500 to-purple-500" : ""}
                 >
-                  <div className={`grid grid-cols-10 gap-4 px-4 py-4 bg-white rounded-xl hover:shadow-md transition-all duration-200 ${isMediumRisk ? '' : 'border border-gray-200'
+                  <div className={`grid grid-cols-11 gap-4 px-4 py-4 bg-white rounded-xl hover:shadow-md transition-all duration-200 ${isMediumRisk ? '' : 'border border-gray-200'
                     }`}>
                     {/* Domain Column */}
                     <div className="col-span-4 flex items-center gap-3">
@@ -368,9 +369,9 @@ const DomainsPage: NextPage = () => {
                     </div>
 
                     {/* Score */}
-                    <div className="col-span-1 text-right">
+                    <div className="col-span-2 text-center">
                       <span className={getScoreColor(domain.latestAiScore)}>
-                        {domain.latestAiScore}
+                        {domain.latestAiScore === 0 ? 'Processing' : domain.latestAiScore}
                       </span>
                     </div>
 
